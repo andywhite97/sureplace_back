@@ -1,0 +1,16 @@
+Django>=5.2,<5.3
+djangorestframework>=3.17.2,<3.18
+djangorestframework-simplejwt>=5.5,<6
+django-filter>=25.1,<26
+django-cors-headers>=4.7,<5
+django-environ>=0.12,<1
+psycopg[binary]>=3.2,<4
+Pillow>=11,<13
+celery[redis]>=5.5,<6
+cloudinary>=1.44,<2
+django-cloudinary-storage>=0.3,<1
+gunicorn>=23,<24
+uvicorn[standard]>=0.34,<1
+whitenoise[brotli]>=6.9,<7
+drf-spectacular>=0.28,<1
+sentry-sdk[django]>=2.35,<3

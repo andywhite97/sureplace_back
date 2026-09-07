@@ -1,0 +1,5 @@
+-r requirements.txt
+black>=25,<27
+ruff>=0.12,<1
+coverage>=7.10,<8
+pip-audit>=2.9,<3
