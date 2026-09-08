@@ -93,8 +93,12 @@ class PasswordResetView(APIView):
                     "Reset your SurePlace password",
                     f"Use this link to reset your password: {link}",
                     reset_route,
-                    template_key="password_reset",
-                    tags={"category": "password_reset"},
+                    template_key="auth.password_reset",
+                    tags={"category": "auth.password_reset"},
+                    context={
+                        "cta_url": link,
+                        "expiry_text": "For your security, this reset link will expire after a limited time.",
+                    },
                 )
             )
         return Response({"detail": "If an account exists for this email, reset instructions have been sent."})

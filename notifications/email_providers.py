@@ -230,7 +230,9 @@ def resolve_bird_base_url(api_key: str, override: str = "") -> str:
         return validate_bird_base_url(override)
     region = bird_region_from_key(api_key)
     if not region:
-        raise ConfigurationEmailProviderError("BIRD_API_KEY must include a supported region such as bk_us1_ or bk_eu1_.")
+        raise ConfigurationEmailProviderError(
+            "BIRD_API_KEY must include a supported region such as bk_us1_ or bk_eu1_."
+        )
     return f"https://{region}.platform.bird.com"
 
 

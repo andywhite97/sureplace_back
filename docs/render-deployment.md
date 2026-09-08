@@ -25,10 +25,10 @@ and environment. Runtime filesystem writes are never durable application media.
 2. Choose appropriate paid plans and region for the database, Key Value, web,
    worker, and Beat services. The Blueprint intentionally does not prescribe cost.
 3. Fill all `sync: false` variables. At minimum set `ALLOWED_HOSTS` to the Render
-   API hostname and custom API domain, `CORS_ALLOWED_ORIGINS` and
-   `FRONTEND_BASE_URL` to the Angular HTTPS origin, all three Cloudinary values,
-   and the production Bird email provider values. Shared values may live in a
-   Render Environment Group.
+   API hostname and custom API domain, `CORS_ALLOWED_ORIGINS`,
+   `CSRF_TRUSTED_ORIGINS`, and `FRONTEND_BASE_URL` to the Angular HTTPS origin,
+   all three Cloudinary values, and the production Bird email provider values.
+   Shared values may live in a Render Environment Group.
 4. Deploy. Docker installs GDAL/GEOS, `build.sh` installs Python dependencies and
    collects WhiteNoise static assets, and `preDeployCommand` runs migrations.
 5. In a Render shell, run `python manage.py createsuperuser`.
@@ -50,6 +50,7 @@ BIRD_REQUEST_TIMEOUT_SECONDS=10
 DEFAULT_FROM_EMAIL=SurePlace <noreply@verified-domain>
 DEFAULT_FROM_NAME=SurePlace
 DEFAULT_REPLY_TO_EMAIL=<optional support mailbox>
+EMAIL_LOGO_URL=<optional public logo URL>
 BIRD_TRACK_OPENS=false
 BIRD_TRACK_CLICKS=false
 ```
@@ -59,6 +60,31 @@ The Bird API key is region-aware. When no override is set, keys such as
 `https://eu1.platform.bird.com`. Do not put Bird credentials in Angular
 environment variables. See `docs/email.md` for sender-domain verification and
 delivery-status semantics.
+
+## Frontend origins
+
+GitHub Pages runs on a different origin from the Render API, so production CORS
+must list the frontend origins exactly. Origins do not include paths.
+
+Custom domain:
+
+```text
+CORS_ALLOWED_ORIGINS=https://sureplace.co.sz,https://www.sureplace.co.sz
+CSRF_TRUSTED_ORIGINS=https://sureplace.co.sz,https://www.sureplace.co.sz
+FRONTEND_BASE_URL=https://sureplace.co.sz
+```
+
+Repository Pages fallback:
+
+```text
+CORS_ALLOWED_ORIGINS=https://andywhite97.github.io
+CSRF_TRUSTED_ORIGINS=https://andywhite97.github.io
+FRONTEND_BASE_URL=https://andywhite97.github.io/sureplace
+```
+
+SurePlace uses JWT for API authentication, but CSRF trusted origins should still
+be configured for any Django endpoint or future browser behavior that relies on
+CSRF checks. Keep frontend and backend URLs HTTPS in production.
 
 The database URL injected by Render is deliberately forced through Django's
 PostGIS engine. Migration `properties.0000_enable_postgis` runs `CREATE EXTENSION

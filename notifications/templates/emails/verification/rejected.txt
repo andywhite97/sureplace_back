@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Verification needs attention
+
+{{ message|default:"Your verification request needs attention before it can be approved." }}
+
+{% if verification.reason %}Reason: {{ verification.reason }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% if secondary_cta_url and secondary_cta_label %}{{ secondary_cta_label }}: {{ secondary_cta_url }}{% endif %}
+{% endblock %}

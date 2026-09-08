@@ -1,0 +1,9 @@
+{% if status == "success" %}
+  <div style="width:44px;height:44px;border-radius:22px;background:#E8F6F3;color:#0F9D83;text-align:center;line-height:44px;font-size:20px;font-weight:800;">&#10003;</div>
+{% elif status == "warning" %}
+  <div style="width:44px;height:44px;border-radius:22px;background:#FFF6E7;color:#D99016;text-align:center;line-height:44px;font-size:20px;font-weight:800;">!</div>
+{% elif status == "error" %}
+  <div style="width:44px;height:44px;border-radius:22px;background:#FDECEC;color:#C73939;text-align:center;line-height:44px;font-size:20px;font-weight:800;">&times;</div>
+{% else %}
+  <div style="width:44px;height:44px;border-radius:22px;background:#EAF2FB;color:#2878D0;text-align:center;line-height:44px;font-size:20px;font-weight:800;">i</div>
+{% endif %}

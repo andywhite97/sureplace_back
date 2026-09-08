@@ -1,0 +1,10 @@
+{% if details %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0 0;background:#F6F9F8;border:1px solid #E4ECE9;border-radius:12px;">
+  {% for item in details %}
+    <tr>
+      <td class="sp-detail-label" style="padding:13px 16px;border-bottom:1px solid #E4ECE9;font-size:14px;line-height:20px;color:#647471;">{{ item.label }}</td>
+      <td class="sp-detail-value" align="right" style="padding:13px 16px;border-bottom:1px solid #E4ECE9;font-size:14px;line-height:20px;color:#152B2A;font-weight:800;word-break:break-word;overflow-wrap:anywhere;">{% if item.label == "Total" %}<span style="color:#0F9D83;">{{ item.value }}</span>{% else %}{{ item.value }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+</table>
+{% endif %}

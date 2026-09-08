@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+You have a new message
+
+{{ message|default:"A new message is waiting in your SurePlace inbox." }}
+{% if message_preview %}
+Preview: {{ message_preview }}
+{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}

@@ -1,0 +1,8 @@
+{{ brand_name|default:"SurePlace" }}
+{{ tagline|default:"Property. Without the noise." }}
+
+{% block content %}{% endblock %}
+
+{{ brand_name|default:"SurePlace" }}
+{{ tagline|default:"Property. Without the noise." }}
+{% if frontend_base_url %}{{ frontend_base_url }}{% endif %}

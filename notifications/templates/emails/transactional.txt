@@ -1,0 +1,11 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+{{ headline }}
+
+{{ message }}
+
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{% if cta_url %}{{ cta_label }}: {{ cta_url }}{% endif %}
+{% if secondary_cta_url and secondary_cta_label %}{{ secondary_cta_label }}: {{ secondary_cta_url }}{% endif %}
+{% endblock %}

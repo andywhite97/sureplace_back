@@ -1,14 +1,18 @@
 # SurePlace Email Delivery
 
-SurePlace keeps email-producing business logic in domain services and delivers
-mail through a small provider boundary:
+SurePlace keeps email-producing business logic in domain services, renders
+HTML/plain-text content with Django templates, and delivers mail through a small
+provider boundary:
 
 ```text
-Domain service -> notifications.services -> Celery task -> EmailProvider -> provider API
+Domain service -> notifications.services -> Django templates -> Celery task -> EmailProvider -> provider API
 ```
 
 Development and tests can continue to use Django email backends. Production uses
 Bird's HTTP Email API by setting `EMAIL_PROVIDER=bird`.
+
+Template structure, registry keys, context rules, and preview tooling are covered
+in `docs/email-templates.md`.
 
 ## Providers
 
@@ -59,6 +63,7 @@ Optional:
 BIRD_API_BASE_URL=
 BIRD_REQUEST_TIMEOUT_SECONDS=10
 DEFAULT_REPLY_TO_EMAIL=
+EMAIL_LOGO_URL=
 BIRD_TRACK_OPENS=false
 BIRD_TRACK_CLICKS=false
 ```

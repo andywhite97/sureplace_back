@@ -1,0 +1,12 @@
+{% extends "emails/base.html" %}
+{% block content %}
+{% include "emails/partials/status_icon.html" %}
+<h1 style="margin:18px 0 0 0;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:28px;line-height:34px;color:#152B2A;">New properties match your search</h1>
+<p style="margin:14px 0 0 0;font-size:16px;line-height:24px;color:#647471;">{{ message|default:"New listings match your saved search." }}</p>
+{% if saved_search.name %}<p style="margin:12px 0 0 0;font-size:15px;line-height:22px;color:#152B2A;"><strong>{{ saved_search.name }}</strong>{% if saved_search.criteria %}<br><span style="color:#647471;">{{ saved_search.criteria }}</span>{% endif %}</p>{% endif %}
+{% for match in matches|slice:":3" %}
+  {% include "emails/partials/listing_card.html" with listing=match %}
+{% endfor %}
+{% include "emails/partials/details_card.html" %}
+{% include "emails/partials/button.html" %}
+{% endblock %}

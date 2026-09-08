@@ -62,5 +62,5 @@ class NotificationTests(APITestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         delivery = EmailDelivery.objects.get()
-        self.assertEqual(delivery.template_key, NotificationType.BOOKING_REQUESTED.lower())
+        self.assertEqual(delivery.template_key, "booking.requested_host")
         self.assertEqual(delivery.status, EmailDelivery.Status.ACCEPTED)

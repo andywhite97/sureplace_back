@@ -376,9 +376,12 @@ configured email backend, while production uses Bird's HTTP Email API with
 `EMAIL_PROVIDER=bird`. Normal notification email is queued after transaction
 commit and delivered by Celery; `EmailDelivery` keeps provider, status, attempts,
 and Bird message IDs without storing rendered email bodies. `FRONTEND_BASE_URL`
-continues to build account and reset links. See `docs/email.md` for setup,
-sender-domain verification, retry behavior, and the distinction between Bird
-`accepted` and final delivery.
+continues to build account and reset links. Django templates under
+`notifications/templates/emails/` provide the branded HTML and plain-text content;
+preview them locally with `python manage.py preview_email <template_key>`. See
+`docs/email.md` and `docs/email-templates.md` for setup, sender-domain
+verification, retry behavior, and the distinction between Bird `accepted` and
+final delivery.
 
 Celery uses Redis in deployed environments while tests set eager mode. Scheduled
 work evaluates saved searches (INSTANT means every 15 minutes by default), expires

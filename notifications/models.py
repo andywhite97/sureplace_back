@@ -90,6 +90,6 @@ class EmailDelivery(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["provider", "provider_message_id"]),
-            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["provider", "provider_message_id"], name="notificati_provide_e9f577_idx"),
+            models.Index(fields=["status", "-created_at"], name="notificati_status_24f7ea_idx"),
         ]

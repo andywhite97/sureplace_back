@@ -73,12 +73,14 @@ class AuthenticationTests(APITestCase):
     def test_password_reset_does_not_enumerate_accounts(self):
         User.objects.create_user(**self.payload)
         with self.captureOnCommitCallbacks(execute=True):
-            known = self.client.post(reverse("accounts:password-reset"), {"email": self.payload["email"]}, format="json")
+            known = self.client.post(
+                reverse("accounts:password-reset"), {"email": self.payload["email"]}, format="json"
+            )
         unknown = self.client.post(reverse("accounts:password-reset"), {"email": "missing@example.com"}, format="json")
         self.assertEqual(known.data, unknown.data)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(EmailDelivery.objects.count(), 1)
-        self.assertEqual(EmailDelivery.objects.get().template_key, "password_reset")
+        self.assertEqual(EmailDelivery.objects.get().template_key, "auth.password_reset")
 
     def test_logout_blacklists_refresh_token(self):
         user = User.objects.create_user(**self.payload)

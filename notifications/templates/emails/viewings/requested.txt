@@ -1,0 +1,11 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+New viewing request
+
+{{ message|default:"A seeker requested a property viewing." }}
+
+{% if property.title %}Property: {{ property.title }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>{{ subject }}</title>
+    <style>
+      @media only screen and (max-width: 640px) {
+        .sp-shell { width: 100% !important; }
+        .sp-pad { padding-left: 20px !important; padding-right: 20px !important; }
+        .sp-tagline { display: block !important; padding-top: 6px !important; text-align: left !important; }
+        .sp-button { display: block !important; width: 100% !important; box-sizing: border-box !important; }
+        .sp-detail-label, .sp-detail-value { display: block !important; width: 100% !important; text-align: left !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background:#F6F9F8;color:#152B2A;font-family:Inter,Arial,Helvetica,sans-serif;">
+    {% if preheader %}
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">{{ preheader }}</div>
+    {% endif %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F9F8;margin:0;padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" class="sp-shell" width="620" cellpadding="0" cellspacing="0" style="width:620px;max-width:620px;background:#FFFFFF;border:1px solid #E4ECE9;border-radius:12px;overflow:hidden;box-shadow:0 16px 40px rgba(21,43,42,0.08);">
+            <tr>
+              <td>{% include "emails/partials/header.html" %}</td>
+            </tr>
+            <tr>
+              <td class="sp-pad" style="padding:30px 34px 28px 34px;">
+                {% block content %}{% endblock %}
+              </td>
+            </tr>
+            <tr>
+              <td>{% include "emails/partials/footer.html" %}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

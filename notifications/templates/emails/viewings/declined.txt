@@ -1,0 +1,11 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Viewing request declined
+
+{{ message|default:"This viewing request was not accepted. You can continue browsing similar properties." }}
+
+{% if property.title %}Property: {{ property.title }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}

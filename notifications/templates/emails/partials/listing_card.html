@@ -1,0 +1,22 @@
+{% if listing %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0 0;border:1px solid #E4ECE9;border-radius:12px;">
+  {% if listing.image_url %}
+    <tr><td style="padding:12px 12px 0 12px;"><img src="{{ listing.image_url }}" alt="{% firstof listing.title listing.name 'SurePlace listing' %}" width="572" style="display:block;width:100%;max-width:572px;height:auto;border:0;border-radius:10px;"></td></tr>
+  {% endif %}
+  <tr><td style="padding:14px 16px 16px 16px;"><strong style="display:block;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:17px;line-height:23px;color:#152B2A;">{% firstof listing.title listing.name "SurePlace listing" %}</strong>{% if listing.location %}<span style="display:block;margin-top:4px;font-size:14px;line-height:20px;color:#647471;">{{ listing.location }}</span>{% endif %}{% if listing.price %}<span style="display:block;margin-top:8px;font-size:15px;line-height:22px;color:#0F9D83;font-weight:800;">{{ listing.price }}</span>{% endif %}</td></tr>
+</table>
+{% elif property %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0 0;border:1px solid #E4ECE9;border-radius:12px;">
+  {% if property.image_url %}
+    <tr><td style="padding:12px 12px 0 12px;"><img src="{{ property.image_url }}" alt="{% firstof property.title property.name 'SurePlace property' %}" width="572" style="display:block;width:100%;max-width:572px;height:auto;border:0;border-radius:10px;"></td></tr>
+  {% endif %}
+  <tr><td style="padding:14px 16px 16px 16px;"><strong style="display:block;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:17px;line-height:23px;color:#152B2A;">{% firstof property.title property.name "SurePlace property" %}</strong>{% if property.location %}<span style="display:block;margin-top:4px;font-size:14px;line-height:20px;color:#647471;">{{ property.location }}</span>{% endif %}{% if property.price %}<span style="display:block;margin-top:8px;font-size:15px;line-height:22px;color:#0F9D83;font-weight:800;">{{ property.price }}</span>{% endif %}</td></tr>
+</table>
+{% elif stay %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0 0;border:1px solid #E4ECE9;border-radius:12px;">
+  {% if stay.image_url %}
+    <tr><td style="padding:12px 12px 0 12px;"><img src="{{ stay.image_url }}" alt="{% firstof stay.name stay.title 'SurePlace stay' %}" width="572" style="display:block;width:100%;max-width:572px;height:auto;border:0;border-radius:10px;"></td></tr>
+  {% endif %}
+  <tr><td style="padding:14px 16px 16px 16px;"><strong style="display:block;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:17px;line-height:23px;color:#152B2A;">{% firstof stay.name stay.title "SurePlace stay" %}</strong>{% if stay.location %}<span style="display:block;margin-top:4px;font-size:14px;line-height:20px;color:#647471;">{{ stay.location }}</span>{% endif %}{% if stay.price %}<span style="display:block;margin-top:8px;font-size:15px;line-height:22px;color:#0F9D83;font-weight:800;">{{ stay.price }}</span>{% endif %}</td></tr>
+</table>
+{% endif %}

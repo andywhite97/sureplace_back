@@ -1,8 +1,8 @@
 from django.conf import settings
 import logging
-from django.utils.html import escape
 from django.utils import timezone
 
+from .email_templates import absolute_url, render_email, template_for_notification
 from .email_providers import EmailProviderError, build_email_message, get_email_provider
 from .models import EmailDelivery, Notification, NotificationPreference
 
@@ -33,12 +33,6 @@ def create_notification(user, kind, title, message, data=None, event_key=None):
     )[0]
 
 
-def render_transactional_email(message, route=""):
-    url = settings.FRONTEND_BASE_URL.rstrip("/") + "/" + route.lstrip("/") if route else settings.FRONTEND_BASE_URL
-    html = f"<div><h2>SurePlace</h2><p>{escape(message)}</p><a href='{escape(url)}'>View on SurePlace</a></div>"
-    return message, html
-
-
 def send_transactional_email(
     to,
     subject,
@@ -49,16 +43,29 @@ def send_transactional_email(
     template_key="transactional",
     tags=None,
     metadata=None,
+    context=None,
 ):
-    text, html = render_transactional_email(message, route)
+    rendered = render_email(
+        template_key,
+        {"subject": subject, "headline": subject, "message": message, "route": route, **(context or {})},
+    )
     delivery = EmailDelivery.objects.create(
         notification=notification,
         recipient=to,
-        subject=subject,
+        subject=rendered.subject,
         provider=getattr(settings, "EMAIL_PROVIDER", "django"),
-        template_key=template_key,
+        template_key=rendered.template_key,
     )
-    return send_email_delivery(delivery.id, to, subject, text, html, template_key=template_key, tags=tags, metadata=metadata)
+    return send_email_delivery(
+        delivery.id,
+        to,
+        rendered.subject,
+        rendered.text,
+        rendered.html,
+        template_key=rendered.template_key,
+        tags=tags,
+        metadata=metadata,
+    )
 
 
 def enqueue_transactional_email(
@@ -71,22 +78,37 @@ def enqueue_transactional_email(
     template_key="transactional",
     tags=None,
     metadata=None,
+    context=None,
 ):
-    text, html = render_transactional_email(message, route)
+    rendered = render_email(
+        template_key,
+        {"subject": subject, "headline": subject, "message": message, "route": route, **(context or {})},
+    )
     delivery = EmailDelivery.objects.create(
         notification=notification,
         recipient=to,
-        subject=subject,
+        subject=rendered.subject,
         provider=getattr(settings, "EMAIL_PROVIDER", "django"),
-        template_key=template_key,
+        template_key=rendered.template_key,
     )
     from .tasks import send_email_delivery_task
 
-    send_email_delivery_task.delay(str(delivery.id), to, subject, text, html, template_key, tags or {}, metadata or {})
+    send_email_delivery_task.delay(
+        str(delivery.id),
+        to,
+        rendered.subject,
+        rendered.text,
+        rendered.html,
+        rendered.template_key,
+        tags or {},
+        metadata or {},
+    )
     return delivery
 
 
-def send_email_delivery(delivery_id, to, subject, text, html, *, template_key="transactional", tags=None, metadata=None):
+def send_email_delivery(
+    delivery_id, to, subject, text, html, *, template_key="transactional", tags=None, metadata=None
+):
     delivery = EmailDelivery.objects.get(id=delivery_id)
     message = build_email_message(
         to,
@@ -153,16 +175,17 @@ def notify_transactional(user, kind, title, message, data, event_key, email_flag
         notification = create_notification(user, kind, title, message, data, event_key)
         pref, _ = NotificationPreference.objects.get_or_create(user=user)
         if notification and pref.email_enabled and getattr(pref, email_flag, False):
-            email_category = kind.lower()
+            template_key = template_for_notification(kind, title)
             enqueue_transactional_email(
                 user.email,
                 title,
                 message,
                 data.get("route", ""),
                 notification=notification,
-                template_key=email_category,
-                tags={"category": email_category},
+                template_key=template_key,
+                tags={"category": template_key},
                 metadata={"notification_id": str(notification.id)},
+                context=notification_context(kind, title, message, data),
             )
 
     transaction.on_commit(deliver)
@@ -173,3 +196,27 @@ def mask_email(value):
     if not separator:
         return "***"
     return f"{local[:1]}***@{domain}"
+
+
+def notification_context(kind, title, message, data):
+    route = data.get("route", "")
+    context = {
+        "subject": title,
+        "headline": title,
+        "message": message,
+        "route": route,
+        "cta_url": absolute_url(route) if route else settings.FRONTEND_BASE_URL,
+        "data": data,
+    }
+    if kind == "SAVED_SEARCH_MATCH":
+        context["saved_search"] = {"name": "Saved search"}
+        context["details"] = [{"label": "Matches", "value": str(data.get("match_count", ""))}]
+        context["secondary_cta_label"] = "Manage Saved Searches"
+        context["secondary_cta_url"] = "/account/saved-searches"
+    if kind.startswith("BOOKING_"):
+        context["details"] = [{"label": "Booking", "value": str(data.get("booking_id", ""))}]
+    if kind.startswith("VIEWING_"):
+        context["details"] = [{"label": "Viewing", "value": str(data.get("viewing_id", ""))}]
+    if kind == "NEW_MESSAGE" or kind == "GUEST_ENQUIRY":
+        context["message_preview"] = message
+    return context

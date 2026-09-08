@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Verification approved
+
+{{ message|default:"Your reviewed verification information has been approved." }}
+
+Verification confirms the reviewed identity, business, or listing information for the stated verification type. It is not a guarantee of property condition, financial safety, or transaction outcome.
+
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}

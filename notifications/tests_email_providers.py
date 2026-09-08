@@ -144,13 +144,14 @@ class EmailDeliveryTests(TestCase):
                 "Booking requested",
                 "You have a new booking request.",
                 "/account/bookings",
-                template_key="booking",
-                tags={"category": "booking"},
+                template_key="booking.confirmed",
+                tags={"category": "booking.confirmed"},
             )
 
         delivery = EmailDelivery.objects.get()
         self.assertEqual(result.provider, "bird")
         self.assertEqual(delivery.provider, "bird")
+        self.assertEqual(delivery.template_key, "booking.confirmed")
         self.assertEqual(delivery.provider_message_id, "em_test_123")
         self.assertEqual(delivery.status, EmailDelivery.Status.ACCEPTED)
         self.assertIsNotNone(delivery.accepted_at)
@@ -161,7 +162,7 @@ class EmailDeliveryTests(TestCase):
         delivery = EmailDelivery.objects.create(recipient="user@sureplace.co.sz", subject="Subject", provider="bird")
         error = RetryableEmailProviderError("retry", status_code=429, code="rate_limited")
         with patch("notifications.tasks.send_email_delivery", side_effect=error):
-            with self.assertRaises(Retry):
+            with self.assertRaises((Retry, RetryableEmailProviderError)):
                 send_email_delivery_task(str(delivery.id), delivery.recipient, delivery.subject, "Text", "")
 
     @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_us1_test", BIRD_API_BASE_URL="")

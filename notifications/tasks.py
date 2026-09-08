@@ -64,7 +64,9 @@ def property_availability_reminders():
 
 
 @shared_task(bind=True, max_retries=4)
-def send_email_delivery_task(self, delivery_id, to, subject, text, html, template_key="transactional", tags=None, metadata=None):
+def send_email_delivery_task(
+    self, delivery_id, to, subject, text, html, template_key="transactional", tags=None, metadata=None
+):
     try:
         result = send_email_delivery(
             delivery_id,

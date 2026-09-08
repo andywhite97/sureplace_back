@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Booking confirmed
+
+{{ message|default:"Your booking is confirmed. Review the details in your SurePlace account." }}
+
+{% if stay.name %}Stay: {{ stay.name }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% if secondary_cta_url and secondary_cta_label %}{{ secondary_cta_label }}: {{ secondary_cta_url }}{% endif %}
+{% endblock %}

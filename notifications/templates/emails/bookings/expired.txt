@@ -1,0 +1,11 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Booking request expired
+
+{{ message|default:"The pending booking was not confirmed before the hold expired." }}
+
+{% if stay.name %}Stay: {{ stay.name }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}

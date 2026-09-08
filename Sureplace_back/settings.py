@@ -115,6 +115,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 BOOKING_HOLD_MINUTES = env.int("BOOKING_HOLD_MINUTES", default=30)
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:4200"])
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticatedOrReadOnly",),
@@ -163,6 +164,7 @@ EMAIL_PROVIDER = env("EMAIL_PROVIDER", default="django").lower()
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="SurePlace <noreply@sureplace.co.sz>")
 DEFAULT_FROM_NAME = env("DEFAULT_FROM_NAME", default="SurePlace")
 DEFAULT_REPLY_TO_EMAIL = env("DEFAULT_REPLY_TO_EMAIL", default="")
+EMAIL_LOGO_URL = env("EMAIL_LOGO_URL", default="")
 BIRD_API_KEY = env("BIRD_API_KEY", default="")
 BIRD_API_BASE_URL = env("BIRD_API_BASE_URL", default="")
 BIRD_REQUEST_TIMEOUT_SECONDS = env.int("BIRD_REQUEST_TIMEOUT_SECONDS", default=10)

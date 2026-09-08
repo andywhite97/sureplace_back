@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Verification submitted
+
+{{ message|default:"We received your verification request. Review is pending." }}
+
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}

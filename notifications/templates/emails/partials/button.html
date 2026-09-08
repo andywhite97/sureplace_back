@@ -1,0 +1,12 @@
+{% if cta_url %}
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 0 0;">
+  <tr>
+    <td align="center" bgcolor="#0F9D83" style="border-radius:12px;">
+      <a class="sp-button" href="{{ cta_url }}" style="display:inline-block;min-width:190px;padding:14px 24px;border-radius:12px;background:#0F9D83;color:#FFFFFF;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;font-weight:800;text-align:center;text-decoration:none;">{{ cta_label|default:"View Details" }}</a>
+    </td>
+  </tr>
+</table>
+{% endif %}
+{% if secondary_cta_url and secondary_cta_label %}
+  <p style="margin:16px 0 0 0;font-size:15px;line-height:22px;"><a href="{{ secondary_cta_url }}" style="color:#0F9D83;font-weight:800;text-decoration:none;">{{ secondary_cta_label }}</a></p>
+{% endif %}

@@ -1,0 +1,11 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Booking request declined
+
+{{ message|default:"This booking request was not accepted. You can browse other stays on SurePlace." }}
+
+{% if stay.name %}Stay: {{ stay.name }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+New booking request
+
+{{ message|default:"A guest has requested a stay. The booking is pending until you confirm it." }}
+
+{% if stay.name %}Stay: {{ stay.name }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% if secondary_cta_url and secondary_cta_label %}{{ secondary_cta_label }}: {{ secondary_cta_url }}{% endif %}
+{% endblock %}

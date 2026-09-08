@@ -1,0 +1,15 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+New properties match your search
+
+{{ message|default:"New listings match your saved search." }}
+{% if saved_search.name %}
+Saved search: {{ saved_search.name }}
+{% if saved_search.criteria %}Criteria: {{ saved_search.criteria }}{% endif %}
+{% endif %}
+
+{% for match in matches|slice:":3" %}- {% firstof match.price "" %} {{ match.title }}{% if match.location %}, {{ match.location }}{% endif %}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% if secondary_cta_url and secondary_cta_label %}{{ secondary_cta_label }}: {{ secondary_cta_url }}{% endif %}
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+Booking cancelled
+
+{{ message|default:"This booking has been cancelled. Review the details in your account." }}
+
+{% if stay.name %}Stay: {{ stay.name }}{% endif %}
+{% for item in details %}{{ item.label }}: {{ item.value }}
+{% endfor %}
+{{ cta_label }}: {{ cta_url }}
+{% endblock %}
