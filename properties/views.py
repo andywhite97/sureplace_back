@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from .filters import PropertyFilter
@@ -103,6 +104,23 @@ class PropertyViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
         return self.get_paginated_response(serializer.data) if page is not None else Response(serializer.data)
 
+    @action(detail=False, methods=["get"])
+    def mine(self, request):
+        if not request.user.is_authenticated:
+            from rest_framework.exceptions import NotAuthenticated
+
+            raise NotAuthenticated()
+        queryset = self.filter_queryset(
+            self.get_queryset().filter(
+                Q(owner=request.user)
+                | Q(agent__user=request.user, agent__is_active=True)
+                | Q(agency__agents__user=request.user, agency__agents__is_active=True)
+            )
+        )
+        page = self.paginate_queryset(queryset)
+        serializer = PropertyDetailSerializer(page, many=True, context=self.get_serializer_context())
+        return self.get_paginated_response(serializer.data)
+
     def _transition(self, service):
         listing = self.get_object()
         try:
@@ -126,3 +144,25 @@ class PropertyViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="confirm-availability")
     def confirm_availability_action(self, request, **kwargs):
         return self._transition(confirm_availability)
+
+    @action(detail=True, methods=["post", "patch", "delete"], parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def images(self, request, **kwargs):
+        listing = self.get_object()
+        if not can_manage_property(request.user, listing):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied()
+        if request.method == "POST":
+            serializer = PropertyImageSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            image = serializer.save(property=listing)
+            return Response(PropertyImageSerializer(image).data, status=201)
+        image = get_object_or_404(listing.images, pk=request.data.get("id") or request.query_params.get("id"))
+        if request.method == "DELETE":
+            image.image.delete(save=False)
+            image.delete()
+            return Response(status=204)
+        serializer = PropertyImageSerializer(image, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

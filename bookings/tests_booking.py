@@ -4,7 +4,8 @@ from django.test import TestCase
 from django.utils import timezone
 from accounts.models import User
 from stays.models import Stay, StayStatus, StayType, RoomType, RoomAvailability
-from .models import BookingStatus
+from .models import BookingStatus, ViewingRequest
+from .serializers import BookingSerializer, ViewingSerializer
 from .services import create_booking, expire_pending, inventory, transition
 
 
@@ -92,3 +93,38 @@ class BookingTests(TestCase):
         self.assertEqual(b.status, BookingStatus.CONFIRMED)
         b = transition(b, BookingStatus.COMPLETED, self.host)
         self.assertEqual(b.status, BookingStatus.COMPLETED)
+
+    def test_booking_serializer_exposes_stay_context(self):
+        b = self.create()
+        data = BookingSerializer(b).data
+        self.assertEqual(data["stay_name"], "Book Lodge")
+        self.assertEqual(data["stay_slug"], self.stay.slug)
+        self.assertEqual(data["stay_town"], "Mbabane")
+        self.assertIn("stay_image", data)
+
+    def test_viewing_serializer_exposes_property_context(self):
+        from properties.models import ListingStatus, ListingType, PropertyListing, PropertyType
+
+        prop = PropertyListing.objects.create(
+            owner=self.host,
+            title="Viewing House",
+            listing_type=ListingType.RENT,
+            property_type=PropertyType.HOUSE,
+            price=5000,
+            region="Hhohho",
+            town="Mbabane",
+            suburb="Sidwashini",
+            status=ListingStatus.PUBLISHED,
+        )
+        viewing = ViewingRequest.objects.create(
+            property=prop,
+            requester=self.guest,
+            requested_date=self.start,
+            requested_time="12:00",
+        )
+        data = ViewingSerializer(viewing).data
+        self.assertEqual(data["property_title"], "Viewing House")
+        self.assertEqual(data["requester_display_name"], "G U")
+        self.assertEqual(data["property_slug"], prop.slug)
+        self.assertEqual(data["property_town"], "Mbabane")
+        self.assertIn("property_image", data)

@@ -5,6 +5,13 @@ from .models import Booking, ViewingRequest
 
 
 class ViewingSerializer(serializers.ModelSerializer):
+    requester_display_name = serializers.SerializerMethodField()
+    property_title = serializers.CharField(source="property.title", read_only=True)
+    property_slug = serializers.CharField(source="property.slug", read_only=True)
+    property_town = serializers.CharField(source="property.town", read_only=True)
+    property_suburb = serializers.CharField(source="property.suburb", read_only=True)
+    property_image = serializers.SerializerMethodField()
+
     class Meta:
         model = ViewingRequest
         fields = "__all__"
@@ -24,9 +31,19 @@ class ViewingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Viewing must be in the future.")
         return a
 
+    def get_property_image(self, obj):
+        return obj.property.cover_image.image.url if obj.property.cover_image else None
+
+    def get_requester_display_name(self, obj):
+        return " ".join(filter(None, (obj.requester.first_name, obj.requester.last_name))) or "SurePlace member"
+
 
 class BookingSerializer(serializers.ModelSerializer):
     stay_name = serializers.CharField(source="stay.name", read_only=True)
+    stay_slug = serializers.CharField(source="stay.slug", read_only=True)
+    stay_town = serializers.CharField(source="stay.town", read_only=True)
+    stay_suburb = serializers.CharField(source="stay.suburb", read_only=True)
+    stay_image = serializers.SerializerMethodField()
     room_name = serializers.CharField(source="room_type.name", read_only=True)
 
     class Meta:
@@ -50,3 +67,6 @@ class BookingSerializer(serializers.ModelSerializer):
             "cancelled_at",
             "completed_at",
         )
+
+    def get_stay_image(self, obj):
+        return obj.stay.cover_image.image.url if obj.stay.cover_image else None

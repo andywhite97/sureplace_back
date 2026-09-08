@@ -121,3 +121,12 @@ class StayPhaseTests(APITestCase):
         self.client.force_authenticate(self.owner)
         self.assertEqual(self.client.post(f"/api/stays/{draft.id}/submit/").status_code, 200)
         self.assertEqual(self.client.post(f"/api/stays/{self.stay.id}/pause/").status_code, 200)
+
+    def test_manager_mine_returns_manageable_stays_with_quality(self):
+        draft = Stay.objects.create(owner=self.owner, name="Draft Stay", stay_type=StayType.HOTEL)
+        self.client.force_authenticate(self.owner)
+        response = self.client.get("/api/stays/mine/")
+        ids = [item["id"] for item in response.data["results"]]
+        self.assertIn(str(self.stay.id), ids)
+        self.assertIn(str(draft.id), ids)
+        self.assertIn("quality", response.data["results"][0])

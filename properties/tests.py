@@ -240,3 +240,11 @@ class PropertyAPITests(APITestCase):
         response = self.client.get(f"/api/properties/{self.published.slug}/")
         self.assertIn("score", response.data["quality"])
         self.assertIn("suggestions", response.data["quality"])
+
+    def test_manager_mine_returns_drafts_and_quality(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.get("/api/properties/mine/")
+        ids = [item["id"] for item in response.data["results"]]
+        self.assertIn(str(self.published.id), ids)
+        self.assertIn(str(self.draft.id), ids)
+        self.assertIn("quality", response.data["results"][0])

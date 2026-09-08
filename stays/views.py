@@ -5,7 +5,8 @@ from django.db.models import BooleanField, Exists, OuterRef, Q, Value
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotAuthenticated, PermissionDenied, ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from .models import *
 from .serializers import *
@@ -121,6 +122,20 @@ class StayViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
+    @action(detail=False, methods=["get"])
+    def mine(self, request):
+        if not request.user.is_authenticated:
+            raise NotAuthenticated()
+        qs = self.filter_queryset(
+            self.get_queryset().filter(
+                Q(owner=request.user)
+                | Q(agent__user=request.user, agent__is_active=True)
+                | Q(agency__agents__user=request.user, agency__agents__is_active=True)
+            )
+        )
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(StayDetailSerializer(page, many=True, context={"request": request}).data)
+
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         obj = self.get_object()
@@ -132,6 +147,26 @@ class StayViewSet(viewsets.ModelViewSet):
         obj = self.get_object()
         pause(obj)
         return Response(StayDetailSerializer(obj, context={"request": request}).data)
+
+    @action(detail=True, methods=["post", "patch", "delete"], parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def images(self, request, pk=None):
+        stay = self.get_object()
+        if not can_manage(request.user, stay):
+            raise PermissionDenied()
+        if request.method == "POST":
+            s = ImageSerializer(data=request.data)
+            s.is_valid(raise_exception=True)
+            image = s.save(stay=stay)
+            return Response(ImageSerializer(image).data, status=201)
+        image = get_object_or_404(stay.images, pk=request.data.get("id") or request.query_params.get("id"))
+        if request.method == "DELETE":
+            image.image.delete(save=False)
+            image.delete()
+            return Response(status=204)
+        s = ImageSerializer(image, data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        s.save()
+        return Response(s.data)
 
     @action(detail=True, methods=["get", "post"])
     def rooms(self, request, pk=None):
@@ -208,6 +243,26 @@ class RoomViewSet(viewsets.ModelViewSet):
             count += 1
             day += timedelta(days=1)
         return Response({"updated": count})
+
+    @action(detail=True, methods=["post", "patch", "delete"], parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def images(self, request, pk=None):
+        room = self.get_object()
+        if not can_manage(request.user, room.stay):
+            raise PermissionDenied()
+        if request.method == "POST":
+            s = RoomImageSerializer(data=request.data)
+            s.is_valid(raise_exception=True)
+            image = s.save(room_type=room)
+            return Response(RoomImageSerializer(image).data, status=201)
+        image = get_object_or_404(room.images, pk=request.data.get("id") or request.query_params.get("id"))
+        if request.method == "DELETE":
+            image.image.delete(save=False)
+            image.delete()
+            return Response(status=204)
+        s = RoomImageSerializer(image, data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        s.save()
+        return Response(s.data)
 
     @action(detail=True, methods=["get"])
     def calendar(self, request, pk=None):

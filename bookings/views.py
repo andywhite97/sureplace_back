@@ -18,11 +18,17 @@ class ViewingViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ViewingRequest.objects.filter(
+        qs = ViewingRequest.objects.filter(
             models.Q(requester=self.request.user)
             | models.Q(property__owner=self.request.user)
             | models.Q(property__agency__agents__user=self.request.user)
         ).distinct()
+        if self.request.query_params.get("scope") == "manager":
+            qs = qs.filter(
+                models.Q(property__owner=self.request.user)
+                | models.Q(property__agency__agents__user=self.request.user)
+            )
+        return qs
 
     def _change(self, status_value, text, manager=False):
         obj = self.get_object()
@@ -136,6 +142,12 @@ class BookingViewSet(viewsets.ReadOnlyModelViewSet):
         for f in ("stay", "room_type", "status", "payment_status"):
             if p.get(f):
                 qs = qs.filter(**{f: p[f]})
+        if p.get("scope") == "manager":
+            qs = qs.filter(
+                models.Q(stay__owner=u)
+                | models.Q(stay__agent__user=u)
+                | models.Q(stay__agency__agents__user=u)
+            )
         return qs.order_by("-created_at")
 
     def _go(self, target):
