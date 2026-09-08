@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .models import User
+from notifications.models import EmailDelivery
 
 
 class AuthenticationTests(APITestCase):
@@ -64,13 +65,20 @@ class AuthenticationTests(APITestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password("AnotherStrong123!"))
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(
+        EMAIL_PROVIDER="django",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        CELERY_TASK_ALWAYS_EAGER=True,
+    )
     def test_password_reset_does_not_enumerate_accounts(self):
         User.objects.create_user(**self.payload)
-        known = self.client.post(reverse("accounts:password-reset"), {"email": self.payload["email"]}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            known = self.client.post(reverse("accounts:password-reset"), {"email": self.payload["email"]}, format="json")
         unknown = self.client.post(reverse("accounts:password-reset"), {"email": "missing@example.com"}, format="json")
         self.assertEqual(known.data, unknown.data)
         self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(EmailDelivery.objects.count(), 1)
+        self.assertEqual(EmailDelivery.objects.get().template_key, "password_reset")
 
     def test_logout_blacklists_refresh_token(self):
         user = User.objects.create_user(**self.payload)

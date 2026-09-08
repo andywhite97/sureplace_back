@@ -371,9 +371,17 @@ deduplication keys, read state, and preferences. Use `/api/notifications/`,
 `/api/notification-preferences/me/`. Domain code calls the centralized service;
 users cannot create notifications through the API.
 
-Email uses environment-configured Django backends and `FRONTEND_BASE_URL`. Celery
-uses Redis in deployed environments while tests set eager mode. Scheduled work
-evaluates saved searches (INSTANT means every 15 minutes by default), expires
+Email uses a centralized provider boundary. Local development defaults to Django's
+configured email backend, while production uses Bird's HTTP Email API with
+`EMAIL_PROVIDER=bird`. Normal notification email is queued after transaction
+commit and delivered by Celery; `EmailDelivery` keeps provider, status, attempts,
+and Bird message IDs without storing rendered email bodies. `FRONTEND_BASE_URL`
+continues to build account and reset links. See `docs/email.md` for setup,
+sender-domain verification, retry behavior, and the distinction between Bird
+`accepted` and final delivery.
+
+Celery uses Redis in deployed environments while tests set eager mode. Scheduled
+work evaluates saved searches (INSTANT means every 15 minutes by default), expires
 booking holds, and reminds owners about stale property availability.
 
 ```powershell
@@ -382,8 +390,8 @@ celery -A Sureplace_back beat -l info
 ```
 
 Production requires the Django web service, PostgreSQL/PostGIS, Redis, a Celery
-worker, Celery Beat, and an email provider. No SMS, push, WhatsApp, payment webhook,
-or WebSocket delivery is included.
+worker, Celery Beat, Bird email credentials, and a Bird-verified sending domain.
+No SMS, push, WhatsApp, payment webhook, or WebSocket delivery is included.
 
 ## Verification and moderation
 
@@ -412,7 +420,7 @@ dependencies with `docker compose up -d db redis`. Seed fictional data with
 
 Production targets a Docker-based Render web service, Render PostgreSQL/PostGIS,
 Render Key Value, separate Celery worker and Beat services, Cloudinary public media,
-WhiteNoise static assets, and an external email provider. See
+WhiteNoise static assets, and Bird transactional email. See
 [`docs/render-deployment.md`](docs/render-deployment.md) for the architecture,
 environment variables, deployment sequence, PostGIS verification, media security,
 and smoke-test checklist. Local development continues to use filesystem storage;

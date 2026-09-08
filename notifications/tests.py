@@ -2,8 +2,8 @@ from django.core import mail
 from django.test import override_settings
 from rest_framework.test import APITestCase
 from accounts.models import User
-from .models import NotificationPreference, NotificationType
-from .services import create_notification, send_transactional_email
+from .models import EmailDelivery, NotificationPreference, NotificationType
+from .services import create_notification, notify_transactional, send_transactional_email
 
 
 class NotificationTests(APITestCase):
@@ -42,3 +42,25 @@ class NotificationTests(APITestCase):
         send_transactional_email(self.user.email, "SurePlace update", "Hello", "/account")
         self.assertEqual(mail.outbox[0].to, [self.user.email])
         self.assertEqual(mail.outbox[0].subject, "SurePlace update")
+
+    @override_settings(
+        EMAIL_PROVIDER="django",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        CELERY_TASK_ALWAYS_EAGER=True,
+    )
+    def test_notify_transactional_enqueues_email_after_commit(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_transactional(
+                self.user,
+                NotificationType.BOOKING_REQUESTED,
+                "Booking requested",
+                "A guest requested a booking.",
+                {"route": "/account/bookings", "booking_id": "BK-1"},
+                "booking:1",
+                "booking_updates_email",
+            )
+
+        self.assertEqual(len(mail.outbox), 1)
+        delivery = EmailDelivery.objects.get()
+        self.assertEqual(delivery.template_key, NotificationType.BOOKING_REQUESTED.lower())
+        self.assertEqual(delivery.status, EmailDelivery.Status.ACCEPTED)

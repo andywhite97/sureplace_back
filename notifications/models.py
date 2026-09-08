@@ -61,3 +61,35 @@ class NotificationPreference(TimeStampedModel):
     saved_search_email = models.BooleanField(default=True)
     listing_reminders_email = models.BooleanField(default=True)
     marketing_email = models.BooleanField(default=False)
+
+
+class EmailDelivery(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        FAILED = "failed", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    notification = models.ForeignKey(
+        Notification, on_delete=models.SET_NULL, null=True, blank=True, related_name="email_deliveries"
+    )
+    recipient = models.EmailField()
+    subject = models.CharField(max_length=998)
+    provider = models.CharField(max_length=40, blank=True)
+    provider_message_id = models.CharField(max_length=120, blank=True)
+    template_key = models.CharField(max_length=80, default="transactional")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_error_code = models.CharField(max_length=100, blank=True)
+    last_error_message = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    failed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["provider", "provider_message_id"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]

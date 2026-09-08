@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.db import transaction
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from rest_framework import generics, permissions, status
@@ -83,12 +83,19 @@ class PasswordResetView(APIView):
         if user:
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/reset-password?uid={uid}&token={token}"
-            send_mail(
-                "Reset your SurePlace password",
-                f"Use this link to reset your password: {link}",
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
+            reset_route = f"reset-password?uid={uid}&token={token}"
+            link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/{reset_route}"
+            from notifications.services import enqueue_transactional_email
+
+            transaction.on_commit(
+                lambda: enqueue_transactional_email(
+                    user.email,
+                    "Reset your SurePlace password",
+                    f"Use this link to reset your password: {link}",
+                    reset_route,
+                    template_key="password_reset",
+                    tags={"category": "password_reset"},
+                )
             )
         return Response({"detail": "If an account exists for this email, reset instructions have been sent."})
 

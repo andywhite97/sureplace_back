@@ -10,7 +10,7 @@ Angular frontend -> Render Django web -> Render PostgreSQL + PostGIS
                                                ^
                                                |
                                           Celery Beat
-                         +-> external email provider
+                         +-> Bird Email API
 ```
 
 Celery Beat is the only periodic scheduler. It dispatches saved-search evaluation,
@@ -27,15 +27,38 @@ and environment. Runtime filesystem writes are never durable application media.
 3. Fill all `sync: false` variables. At minimum set `ALLOWED_HOSTS` to the Render
    API hostname and custom API domain, `CORS_ALLOWED_ORIGINS` and
    `FRONTEND_BASE_URL` to the Angular HTTPS origin, all three Cloudinary values,
-   and the production email provider values. Shared values may live in a Render
-   Environment Group.
+   and the production Bird email provider values. Shared values may live in a
+   Render Environment Group.
 4. Deploy. Docker installs GDAL/GEOS, `build.sh` installs Python dependencies and
    collects WhiteNoise static assets, and `preDeployCommand` runs migrations.
 5. In a Render shell, run `python manage.py createsuperuser`.
 6. Verify `GET /api/health/` returns `{"status":"ok","database":"up"}`.
 7. Upload an avatar and listing image and confirm their URLs use Cloudinary.
 8. Submit a test notification task and inspect the Celery worker logs. Confirm Beat
-   is the sole scheduler and test delivery through the configured email provider.
+   is the sole scheduler and test delivery through Bird. The logged Bird message
+   ID means accepted by Bird, not final inbox delivery.
+
+## Email environment
+
+Set these variables on both the web service and Celery worker:
+
+```text
+EMAIL_PROVIDER=bird
+BIRD_API_KEY=<sync false secret>
+BIRD_API_BASE_URL=<optional regional HTTPS override>
+BIRD_REQUEST_TIMEOUT_SECONDS=10
+DEFAULT_FROM_EMAIL=SurePlace <noreply@verified-domain>
+DEFAULT_FROM_NAME=SurePlace
+DEFAULT_REPLY_TO_EMAIL=<optional support mailbox>
+BIRD_TRACK_OPENS=false
+BIRD_TRACK_CLICKS=false
+```
+
+The Bird API key is region-aware. When no override is set, keys such as
+`bk_us1_...` and `bk_eu1_...` select `https://us1.platform.bird.com` and
+`https://eu1.platform.bird.com`. Do not put Bird credentials in Angular
+environment variables. See `docs/email.md` for sender-domain verification and
+delivery-status semantics.
 
 The database URL injected by Render is deliberately forced through Django's
 PostGIS engine. Migration `properties.0000_enable_postgis` runs `CREATE EXTENSION
@@ -82,6 +105,6 @@ suite against genuine PostgreSQL/PostGIS with `USE_SQLITE=false` and a disposabl
 `DATABASE_URL`. Automated tests must keep `USE_CLOUDINARY=false`; they never upload
 to a real Cloudinary account. Rotate any credential that is accidentally committed.
 
-Render's health check uses only the database. Redis, Cloudinary, and email checks
+Render's health check uses only the database. Redis, Cloudinary, and Bird checks
 belong in deployment smoke tests so routine health polling does not call external
 providers or enqueue work.
