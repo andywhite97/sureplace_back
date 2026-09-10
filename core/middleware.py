@@ -23,6 +23,8 @@ class RequestIDMiddleware:
             logger.exception("unhandled request_id=%s method=%s path=%s", request_id, request.method, request.path)
             raise
         response["X-Request-ID"] = request_id
+        duration_ms = (time.monotonic() - started) * 1000
+        response["Server-Timing"] = f"app;dur={duration_ms:.2f}"
         user_id = getattr(getattr(request, "user", None), "id", None)
         logger.info(
             "request_id=%s method=%s path=%s status=%s duration_ms=%.2f user_id=%s",
@@ -30,7 +32,7 @@ class RequestIDMiddleware:
             request.method,
             request.path,
             response.status_code,
-            (time.monotonic() - started) * 1000,
+            duration_ms,
             user_id or "anonymous",
         )
         return response

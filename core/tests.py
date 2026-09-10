@@ -68,6 +68,6 @@ class StorageConfigurationTests(SimpleTestCase):
             private_verification_storage.url("verification/id.pdf")
 
     @override_settings(DEBUG=False)
-    def test_demo_reset_is_blocked_outside_debug(self):
+    def test_demo_reset_requires_yes_outside_debug(self):
         with self.assertRaises(CommandError):
-            call_command("seed_demo_data", reset=True, yes=True)
+            call_command("seed_demo_data", reset=True)

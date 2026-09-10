@@ -416,8 +416,9 @@ not a SurePlace guarantee or endorsement.
 
 The canonical prefix is `/api/v1/`; legacy `/api/` routes remain temporary aliases.
 See `docs/api.md`, `docs/frontend-integration.md`, and `/api/v1/docs/`. Start local
-dependencies with `docker compose up -d db redis`. Seed fictional data with
-`python manage.py seed_demo_data`; reset requires `DEBUG=True` and `--reset --yes`.
+dependencies with `docker compose up -d db redis`. Seed fictional local/staging data
+with `python manage.py seed_demo_data`; see `docs/demo-data.md` for reset, count,
+credential, and safety details.
 
 ## Production infrastructure
 

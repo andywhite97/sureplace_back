@@ -3,8 +3,11 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from core.seo import sitemap_xml
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("sitemap.xml", sitemap_xml, name="sitemap"),
     path("api/v1/", include(("Sureplace_back.api_urls", "api_v1"), namespace="v1")),
     path("api/health/", __import__("core.views", fromlist=["health"]).health, name="health"),
     path("api/auth/", include("accounts.urls")),

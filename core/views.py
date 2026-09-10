@@ -1,6 +1,7 @@
 from django.db import connection
 from django.http import JsonResponse
 from django.conf import settings
+from django.core.cache import cache
 from .features import frontend_config
 from .reference import reference_data
 
@@ -29,8 +30,14 @@ def ready(request):
 
 
 def reference(request):
-    return JsonResponse(reference_data())
+    data = cache.get_or_set("public-reference:v1", reference_data, settings.PUBLIC_REFERENCE_CACHE_SECONDS)
+    response = JsonResponse(data)
+    response["Cache-Control"] = f"public, max-age={settings.PUBLIC_REFERENCE_CACHE_SECONDS}"
+    return response
 
 
 def config(request):
-    return JsonResponse(frontend_config())
+    data = cache.get_or_set("public-config:v1", frontend_config, settings.PUBLIC_CONFIG_CACHE_SECONDS)
+    response = JsonResponse(data)
+    response["Cache-Control"] = f"public, max-age={settings.PUBLIC_CONFIG_CACHE_SECONDS}"
+    return response

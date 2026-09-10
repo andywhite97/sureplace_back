@@ -83,7 +83,10 @@ class PropertyListSerializer(LocationMixin, serializers.ModelSerializer):
         )
 
     def get_cover_image(self, obj):
-        image = obj.cover_image
+        prefetched = getattr(obj, "_cover_images", None)
+        image = prefetched[0] if prefetched else None
+        if prefetched is None:
+            image = obj.cover_image
         if not image:
             return None
         request = self.context.get("request")

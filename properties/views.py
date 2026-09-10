@@ -1,7 +1,9 @@
 import uuid
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Exists, OuterRef, Q, Value, BooleanField
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
@@ -10,9 +12,9 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from .filters import PropertyFilter
-from .models import AvailabilityStatus, ListingStatus, PropertyListing
-from .permissions import PropertyPermission
-from .serializers import PropertyDetailSerializer, PropertyListSerializer, PropertyWriteSerializer
+from .models import AvailabilityStatus, ListingStatus, PropertyImage, PropertyListing
+from .permissions import PropertyPermission, can_manage_property
+from .serializers import PropertyDetailSerializer, PropertyImageSerializer, PropertyListSerializer, PropertyWriteSerializer
 from .services import confirm_availability, pause_listing, submit_listing
 
 
@@ -25,9 +27,23 @@ class PropertyViewSet(viewsets.ModelViewSet):
     lookup_value_regex = "[^/]+"
 
     def get_queryset(self):
-        queryset = PropertyListing.objects.select_related("owner", "agency", "agent", "agent__user").prefetch_related(
-            "amenities", "images"
-        )
+        action = getattr(self, "action", None)
+        if action in {"list", "featured"}:
+            cover_images = Prefetch(
+                "images",
+                queryset=PropertyImage.objects.filter(is_cover=True).order_by("sort_order", "created_at"),
+                to_attr="_cover_images",
+            )
+            queryset = PropertyListing.objects.select_related("agency", "agent", "agent__user").prefetch_related(
+                cover_images
+            )
+        else:
+            queryset = PropertyListing.objects.select_related(
+                "owner",
+                "agency",
+                "agent",
+                "agent__user",
+            ).prefetch_related("amenities", "images")
         if self.request.user.is_authenticated:
             from favourites.models import Favourite
 
@@ -97,12 +113,32 @@ class PropertyViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def featured(self, request):
+        cache_key = "properties:featured:v2"
+        if not request.user.is_authenticated:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                response = Response(cached)
+                response["Cache-Control"] = f"public, max-age={settings.FEATURED_LISTINGS_CACHE_SECONDS}"
+                return response
         queryset = self.filter_queryset(
             self.get_queryset().filter(featured=True, availability_status=AvailabilityStatus.AVAILABLE)
         )
-        page = self.paginate_queryset(queryset)
-        serializer = self.get_serializer(page if page is not None else queryset, many=True)
-        return self.get_paginated_response(serializer.data) if page is not None else Response(serializer.data)
+        items = list(queryset[:6])
+        data = {
+            "count": len(items),
+            "next": None,
+            "previous": None,
+            "results": self.get_serializer(items, many=True).data,
+        }
+        if not request.user.is_authenticated:
+            cache.set(cache_key, data, settings.FEATURED_LISTINGS_CACHE_SECONDS)
+        response = Response(data)
+        response["Cache-Control"] = (
+            f"public, max-age={settings.FEATURED_LISTINGS_CACHE_SECONDS}"
+            if not request.user.is_authenticated
+            else "private, no-store"
+        )
+        return response
 
     @action(detail=False, methods=["get"])
     def mine(self, request):

@@ -1,7 +1,8 @@
 import uuid
 from datetime import date, timedelta
 from django.conf import settings
-from django.db.models import BooleanField, Exists, OuterRef, Q, Value
+from django.core.cache import cache
+from django.db.models import BooleanField, Count, Exists, Min, OuterRef, Prefetch, Q, Value
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
@@ -17,9 +18,34 @@ class StayViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        qs = Stay.objects.select_related("agency", "agent", "agent__user").prefetch_related(
-            "images", "amenities", "room_types__images", "room_types__availability"
-        )
+        action = getattr(self, "action", None)
+        if action in ("list", "featured"):
+            cover_images = Prefetch(
+                "images",
+                queryset=StayImage.objects.filter(is_cover=True).order_by("sort_order", "created_at"),
+                to_attr="_cover_images",
+            )
+            qs = (
+                Stay.objects.select_related("agency", "agent", "agent__user")
+                .prefetch_related(cover_images)
+                .annotate(
+                    _minimum_nightly_price=Min(
+                        "room_types__base_price",
+                        filter=Q(room_types__is_active=True),
+                    ),
+                    _available_room_type_count=Count(
+                        "room_types",
+                        filter=Q(room_types__is_active=True, room_types__quantity__gt=0),
+                        distinct=True,
+                    ),
+                )
+            )
+        else:
+            qs = Stay.objects.select_related("agency", "agent", "agent__user").prefetch_related(
+                "images",
+                "amenities",
+                "room_types__images",
+            )
         if self.request.user.is_authenticated:
             from favourites.models import Favourite
 
@@ -118,9 +144,30 @@ class StayViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def featured(self, request):
+        cache_key = "stays:featured:v2"
+        if not request.user.is_authenticated:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                response = Response(cached)
+                response["Cache-Control"] = f"public, max-age={settings.FEATURED_LISTINGS_CACHE_SECONDS}"
+                return response
         qs = self.get_queryset().filter(featured=True, room_types__is_active=True)
-        page = self.paginate_queryset(qs)
-        return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        items = list(qs[:6])
+        data = {
+            "count": len(items),
+            "next": None,
+            "previous": None,
+            "results": self.get_serializer(items, many=True).data,
+        }
+        if not request.user.is_authenticated:
+            cache.set(cache_key, data, settings.FEATURED_LISTINGS_CACHE_SECONDS)
+        response = Response(data)
+        response["Cache-Control"] = (
+            f"public, max-age={settings.FEATURED_LISTINGS_CACHE_SECONDS}"
+            if not request.user.is_authenticated
+            else "private, no-store"
+        )
+        return response
 
     @action(detail=False, methods=["get"])
     def mine(self, request):

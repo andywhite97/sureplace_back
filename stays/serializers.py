@@ -95,13 +95,23 @@ class StayListSerializer(serializers.ModelSerializer):
         )
 
     def get_cover_image(self, o):
-        return o.cover_image.image.url if o.cover_image else None
+        prefetched = getattr(o, "_cover_images", None)
+        image = prefetched[0] if prefetched else None
+        if prefetched is None:
+            image = o.cover_image
+        return image.image.url if image else None
 
     def get_minimum_nightly_price(self, o):
+        value = getattr(o, "_minimum_nightly_price", None)
+        if value is not None:
+            return str(value)
         room = o.room_types.filter(is_active=True).order_by("base_price").first()
         return str(room.base_price) if room else None
 
     def get_available_room_type_count(self, o):
+        value = getattr(o, "_available_room_type_count", None)
+        if value is not None:
+            return value
         return o.room_types.filter(is_active=True, quantity__gt=0).count()
 
 

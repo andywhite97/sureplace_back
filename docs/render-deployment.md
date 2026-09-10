@@ -69,9 +69,9 @@ must list the frontend origins exactly. Origins do not include paths.
 Custom domain:
 
 ```text
-CORS_ALLOWED_ORIGINS=https://sureplace.co.sz,https://www.sureplace.co.sz
-CSRF_TRUSTED_ORIGINS=https://sureplace.co.sz,https://www.sureplace.co.sz
-FRONTEND_BASE_URL=https://sureplace.co.sz
+CORS_ALLOWED_ORIGINS=https://sureplace.twinpeaksinvestment.com
+CSRF_TRUSTED_ORIGINS=https://sureplace.twinpeaksinvestment.com
+FRONTEND_BASE_URL=https://sureplace.twinpeaksinvestment.com
 ```
 
 Repository Pages fallback:
