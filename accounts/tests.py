@@ -33,7 +33,8 @@ class AuthenticationTests(APITestCase):
         CELERY_TASK_ALWAYS_EAGER=False,
     )
     def test_registration_sends_welcome_email(self):
-        response = self.client.post(reverse("accounts:register"), self.payload, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("accounts:register"), self.payload, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(mail.outbox), 1)

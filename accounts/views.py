@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction
+import logging
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from rest_framework import generics, permissions, status
@@ -9,6 +10,8 @@ from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView
+
+logger = logging.getLogger(__name__)
 
 from .serializers import (
     ChangePasswordSerializer,
@@ -40,19 +43,23 @@ class RegisterView(generics.CreateAPIView):
         user = serializer.save()
         from notifications.services import send_transactional_email
 
-        transaction.on_commit(
-            lambda: send_transactional_email(
-                user.email,
-                "Welcome to SurePlace",
-                (
-                    "Your account is ready. You can now explore properties, save favourites, "
-                    "request viewings, book stays, and message hosts or agents."
-                ),
-                "/properties",
-                template_key="auth.welcome",
-                tags={"category": "auth.welcome"},
-            )
-        )
+        def send_welcome_email():
+            try:
+                send_transactional_email(
+                    user.email,
+                    "Welcome to SurePlace",
+                    (
+                        "Your account is ready. You can now explore properties, save favourites, "
+                        "request viewings, book stays, and message hosts or agents."
+                    ),
+                    "/properties",
+                    template_key="auth.welcome",
+                    tags={"category": "auth.welcome"},
+                )
+            except Exception:
+                logger.exception("welcome_email_failed user_id=%s", user.id)
+
+        transaction.on_commit(send_welcome_email)
 
 
 class MeView(generics.RetrieveUpdateAPIView):
