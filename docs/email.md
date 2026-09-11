@@ -141,6 +141,71 @@ can duplicate uncertain deliveries.
 Password reset uses the same provider abstraction and still keeps Django's reset
 token generation and account-enumeration-safe response.
 
+## Email Provider Diagnostics
+
+Use the CLI-only diagnostic command to verify the configured transactional email
+provider from the same Django environment as the backend:
+
+```bash
+python manage.py test_email_provider you@example.com
+```
+
+Direct mode renders the `system.email_diagnostic` transactional template, creates
+an `EmailDelivery`, and calls the configured provider synchronously through the
+normal SurePlace provider abstraction. With `EMAIL_PROVIDER=bird`, a successful
+Bird HTTP `202` is reported as `accepted`, not delivered:
+
+```text
+Email provider diagnostic successful.
+Provider: bird
+Status: accepted
+Message ID: em_...
+Bird accepted the message for delivery.
+```
+
+Use Bird dashboard events or provider logs to inspect later delivery, bounce, or
+rejection status.
+
+To validate configuration and rendering without sending or queueing anything:
+
+```bash
+python manage.py test_email_provider you@example.com --dry-run
+```
+
+To verify that the normal asynchronous path can queue a diagnostic email:
+
+```bash
+python manage.py test_email_provider you@example.com --via-celery
+```
+
+`--via-celery` queues the rendered email through the existing Celery delivery
+task and prints the local delivery ID. It does not print a Bird message ID because
+Bird has not accepted the message until the worker executes the task.
+
+The command validates the recipient and configured sender before attempting
+delivery. It prints only safe operational details such as provider, Django backend
+for `EMAIL_PROVIDER=django`, sender, recipient, status, and provider message ID.
+It never prints API keys, authorization headers, database URLs, or raw provider
+responses.
+
+Common Bird failures are mapped to operator messages:
+
+- `401`: check `BIRD_API_KEY`.
+- `403`: check API key permissions or scope.
+- `422`: check the payload, sender, and that `DEFAULT_FROM_EMAIL` belongs to a
+  verified Bird sending domain.
+- `429`: rate limit reached; retry later.
+- `5xx` or timeout: Bird is temporarily unavailable.
+
+From the Render backend shell, run the same command so it picks up the deployed
+service environment variables:
+
+```bash
+python manage.py test_email_provider your-real-test-address@example.com
+```
+
+For the Celery mode on Render, confirm the worker service is running first.
+
 ## Covered Email Types
 
 The centralized notification path covers booking, viewing, verification,

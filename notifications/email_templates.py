@@ -65,6 +65,14 @@ TEMPLATES: dict[str, EmailTemplateDefinition] = {
         default_cta_label="Reset Password",
         status="info",
     ),
+    "system.email_diagnostic": EmailTemplateDefinition(
+        subject="SurePlace email delivery test",
+        html_template="emails/system/email_diagnostic.html",
+        text_template="emails/system/email_diagnostic.txt",
+        preheader="This diagnostic message was sent manually by a SurePlace administrator.",
+        default_cta_label="Open SurePlace",
+        status="success",
+    ),
     "booking.requested_host": EmailTemplateDefinition(
         subject=lambda c: f"New booking request - {value('stay.name', 'SurePlace stay')(c)}",
         html_template="emails/bookings/requested_host.html",
@@ -299,6 +307,15 @@ def sample_context(template_key: str) -> dict[str, Any]:
             "message": "A password reset was requested for your SurePlace account.",
             "cta_url": "/reset-password?uid=sample&token=sample-token",
             "expiry_text": "For your security, this reset link will expire after a limited time.",
+        },
+        "system.email_diagnostic": {
+            "headline": "SurePlace email delivery test",
+            "message": (
+                "Your SurePlace email provider is configured correctly. "
+                "This diagnostic message was sent manually by a SurePlace administrator. "
+                "No action is required."
+            ),
+            "cta_url": "/",
         },
         "booking.requested_host": _booking_sample("New booking request", "/account/bookings/sample"),
         "booking.confirmed": _booking_sample("Booking confirmed", "/account/bookings/sample"),

@@ -1,0 +1,8 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+{{ headline }}
+
+{{ message }}
+
+{% if cta_url %}{{ cta_label }}: {{ cta_url }}{% endif %}
+{% endblock %}
