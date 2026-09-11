@@ -9,6 +9,7 @@ from notifications.models import EmailDelivery
 
 
 class AuthenticationTests(APITestCase):
+
     def setUp(self):
         self.payload = {
             "first_name": "Nomsa",

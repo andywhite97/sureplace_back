@@ -11,6 +11,8 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ class EmailProviderResult:
 class EmailProviderError(Exception):
     retryable = False
 
-    def __init__(self, message: str, *, status_code: int | None = None, code: str = ""):
+    def __init__(self, message: str, *, status_code: int | None=None, code: str=""):
         super().__init__(message)
         self.status_code = status_code
         self.code = code
@@ -139,6 +141,7 @@ class BirdEmailProvider(EmailProvider):
     def _payload(self, message: EmailMessage) -> dict[str, Any]:
         if not message.html and not message.text:
             raise PermanentEmailProviderError("Email content must include html or text.", code="invalid_content")
+        validate_message_addresses(message)
         payload: dict[str, Any] = {
             "from": _address_payload(EmailAddress(message.from_email, message.from_name)),
             "to": [_address_payload(address) for address in message.to],
@@ -177,14 +180,14 @@ def build_email_message(
     to: str | list[str],
     subject: str,
     text: str,
-    html: str = "",
+    html: str="",
     *,
-    cc: list[str] | None = None,
-    bcc: list[str] | None = None,
-    template_key: str = "transactional",
-    tags: dict[str, str] | None = None,
-    metadata: dict[str, str] | None = None,
-    idempotency_key: str = "",
+    cc: list[str] | None=None,
+    bcc: list[str] | None=None,
+    template_key: str="transactional",
+    tags: dict[str, str] | None=None,
+    metadata: dict[str, str] | None=None,
+    idempotency_key: str="",
 ) -> EmailMessage:
     from_name, from_email = parse_configured_sender()
     reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", "")
@@ -221,11 +224,23 @@ def parse_email_address(value: str) -> EmailAddress:
     return EmailAddress(email=email or value, name=name)
 
 
-def format_sender(email: str, name: str = "") -> str:
+def validate_message_addresses(message: EmailMessage) -> None:
+    addresses = [*message.to, *message.cc, *message.bcc, *message.reply_to]
+    addresses.append(EmailAddress(message.from_email, message.from_name))
+    for address in addresses:
+        try:
+            validate_email(address.email)
+        except ValidationError as exc:
+            raise PermanentEmailProviderError(
+                f"Invalid email address for {address.email!r}.", code="invalid_address"
+            ) from exc
+
+
+def format_sender(email: str, name: str="") -> str:
     return f"{name} <{email}>" if name else email
 
 
-def resolve_bird_base_url(api_key: str, override: str = "") -> str:
+def resolve_bird_base_url(api_key: str, override: str="") -> str:
     if override:
         return validate_bird_base_url(override)
     region = bird_region_from_key(api_key)

@@ -35,6 +35,7 @@ class _Response:
 
 
 class BirdEmailProviderTests(TestCase):
+
     @override_settings(EMAIL_PROVIDER="django", EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_development_django_provider_uses_django_backend(self):
         provider = get_email_provider()
@@ -102,6 +103,18 @@ class BirdEmailProviderTests(TestCase):
         with self.assertRaises(ConfigurationEmailProviderError):
             get_email_provider()
 
+    @override_settings(
+        EMAIL_PROVIDER="bird",
+        BIRD_API_KEY="bk_eu1_test",
+        DEFAULT_FROM_EMAIL="SurePlace <not-an-email>",
+    )
+    def test_bird_rejects_invalid_sender_before_network_call(self):
+        message = build_email_message("user@example.test", "Subject", "Text")
+        with patch("notifications.email_providers.urlopen") as send:
+            with self.assertRaisesRegex(PermanentEmailProviderError, "Invalid email address"):
+                BirdEmailProvider().send(message)
+        send.assert_not_called()
+
     @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_us1_test", BIRD_API_BASE_URL="http://example.com")
     def test_bird_rejects_insecure_base_url_override(self):
         with self.assertRaises(ConfigurationEmailProviderError):
@@ -136,6 +149,7 @@ class BirdEmailProviderTests(TestCase):
 
 
 class EmailDeliveryTests(TestCase):
+
     @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_us1_test", BIRD_API_BASE_URL="")
     def test_delivery_record_captures_provider_message_id_as_accepted(self):
         with patch("notifications.email_providers.urlopen", return_value=_Response()):
