@@ -18,7 +18,7 @@ from .email_providers import (
     sanitize_bird_tag_value,
 )
 from .models import EmailDelivery
-from .services import send_transactional_email
+from .services import enqueue_transactional_email, send_transactional_email
 from .tasks import send_email_delivery_task
 
 
@@ -201,7 +201,7 @@ class BirdEmailProviderTests(TestCase):
         self.assertEqual(caught.exception.request_id, "req_test_123")
         self.assertEqual(
             str(caught.exception),
-            "Request has 1 validation error.\nfrom.email: must be a valid email address",
+            "Request has 1 validation error. from.email: must be a valid email address",
         )
 
     @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_eu1_test")
@@ -262,6 +262,52 @@ class BirdEmailProviderTests(TestCase):
 
 
 class EmailDeliveryTests(TestCase):
+
+    @override_settings(
+        EMAIL_PROVIDER="django",
+        EMAIL_DELIVERY_MODE="async",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    )
+    def test_enqueue_transactional_email_async_mode_queues_celery_task(self):
+        with patch("notifications.tasks.send_email_delivery_task.delay") as delay:
+            delivery = enqueue_transactional_email(
+                "owner@sureplace.co.sz",
+                "Booking requested",
+                "You have a new booking request.",
+                "/account/bookings",
+                template_key="booking.confirmed",
+                tags={"category": "booking.confirmed"},
+            )
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, EmailDelivery.Status.PENDING)
+        self.assertEqual(delivery.attempts, 0)
+        self.assertEqual(len(mail.outbox), 0)
+        delay.assert_called_once()
+
+    @override_settings(
+        EMAIL_PROVIDER="django",
+        EMAIL_DELIVERY_MODE="sync",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    )
+    def test_enqueue_transactional_email_sync_mode_sends_through_provider(self):
+        with patch("notifications.tasks.send_email_delivery_task.delay") as delay:
+            delivery = enqueue_transactional_email(
+                "owner@sureplace.co.sz",
+                "Booking requested",
+                "You have a new booking request.",
+                "/account/bookings",
+                template_key="booking.confirmed",
+                tags={"category": "booking.confirmed"},
+            )
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, EmailDelivery.Status.ACCEPTED)
+        self.assertEqual(delivery.provider, "django")
+        self.assertEqual(delivery.attempts, 1)
+        self.assertIsNotNone(delivery.accepted_at)
+        self.assertEqual(mail.outbox[0].to, ["owner@sureplace.co.sz"])
+        delay.assert_not_called()
 
     @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_us1_test", BIRD_API_BASE_URL="")
     def test_delivery_record_captures_provider_message_id_as_accepted(self):

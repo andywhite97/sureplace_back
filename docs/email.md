@@ -41,6 +41,7 @@ Required for local development:
 
 ```text
 EMAIL_PROVIDER=django
+EMAIL_DELIVERY_MODE=async
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 DEFAULT_FROM_EMAIL=SurePlace <noreply@sureplace.co.sz>
 DEFAULT_FROM_NAME=SurePlace
@@ -51,6 +52,7 @@ Required for production:
 
 ```text
 EMAIL_PROVIDER=bird
+EMAIL_DELIVERY_MODE=async
 BIRD_API_KEY=<server-side Bird API key>
 DEFAULT_FROM_EMAIL=SurePlace <noreply@verified-domain>
 DEFAULT_FROM_NAME=SurePlace
@@ -71,6 +73,29 @@ BIRD_TRACK_CLICKS=false
 
 Bird credentials are server-side only. They must never be exposed to Angular,
 committed to git, or written to logs.
+
+## Delivery Mode
+
+`EMAIL_DELIVERY_MODE` controls whether transactional email is handed to Celery or
+sent immediately through the same SurePlace provider abstraction:
+
+- `async` (default): create `EmailDelivery`, enqueue the Celery delivery task, and
+  let the worker call the configured provider. This remains the intended
+  production mode.
+- `sync`: create `EmailDelivery` and call the configured provider immediately in
+  the current process. This is intended only for staging/live testing, for
+  example on Render while confirming Bird credentials and sender-domain setup.
+
+For Render live testing:
+
+```text
+EMAIL_DELIVERY_MODE=sync
+```
+
+Sync mode does not call Bird from views. Views and domain services still use the
+normal SurePlace email service, which renders templates, stores `EmailDelivery`,
+uses the configured provider, captures provider message IDs, and preserves the
+same permanent/transient Bird error handling.
 
 ## Sender Domain
 

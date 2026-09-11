@@ -35,7 +35,7 @@ Last updated: 2026-09-08
 - Confirm media upload limits and accepted MIME types for property, stay, room, and verification documents.
 - Confirm ownership checks for manager-only property/stay/room/image endpoints.
 - Confirm verification documents are private and not exposed through public media URLs.
-- Confirm `EMAIL_PROVIDER=bird`, `BIRD_API_KEY`, `DEFAULT_FROM_EMAIL`, and `DEFAULT_FROM_NAME` are set on both web and Celery worker services.
+- Confirm `EMAIL_PROVIDER=bird`, `EMAIL_DELIVERY_MODE=async`, `BIRD_API_KEY`, `DEFAULT_FROM_EMAIL`, and `DEFAULT_FROM_NAME` are set on both web and Celery worker services.
 - Confirm Bird sender-domain DNS is verified and a staging transactional email records a Bird `em_...` message ID as `accepted`.
 
 ## Launch Decision

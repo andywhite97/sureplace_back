@@ -91,6 +91,18 @@ def enqueue_transactional_email(
         provider=getattr(settings, "EMAIL_PROVIDER", "django"),
         template_key=rendered.template_key,
     )
+    if getattr(settings, "EMAIL_DELIVERY_MODE", "async").lower() == "sync":
+        send_email_delivery(
+            delivery.id,
+            to,
+            rendered.subject,
+            rendered.text,
+            rendered.html,
+            template_key=rendered.template_key,
+            tags=tags or {},
+            metadata=metadata or {},
+        )
+        return delivery
     from .tasks import send_email_delivery_task
 
     send_email_delivery_task.delay(

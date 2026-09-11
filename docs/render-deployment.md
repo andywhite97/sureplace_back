@@ -44,6 +44,7 @@ Set these variables on both the web service and Celery worker:
 
 ```text
 EMAIL_PROVIDER=bird
+EMAIL_DELIVERY_MODE=async
 BIRD_API_KEY=<sync false secret>
 BIRD_API_BASE_URL=<optional regional HTTPS override>
 BIRD_REQUEST_TIMEOUT_SECONDS=10
