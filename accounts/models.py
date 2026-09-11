@@ -58,6 +58,8 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     last_name = models.CharField(max_length=150)
     avatar = models.ImageField(upload_to="sureplace/users/avatars/%Y/%m/", blank=True, null=True)
     is_email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    welcome_email_sent_at = models.DateTimeField(null=True, blank=True)
     is_phone_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

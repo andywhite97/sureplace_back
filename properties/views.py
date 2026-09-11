@@ -11,6 +11,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
+from accounts.permissions import IsEmailVerified
 from .filters import PropertyFilter
 from .models import AvailabilityStatus, ListingStatus, PropertyImage, PropertyListing
 from .permissions import PropertyPermission, can_manage_property
@@ -19,7 +20,7 @@ from .services import confirm_availability, pause_listing, submit_listing
 
 
 class PropertyViewSet(viewsets.ModelViewSet):
-    permission_classes = [PropertyPermission]
+    permission_classes = [PropertyPermission, IsEmailVerified]
     filterset_class = PropertyFilter
     filter_backends = [filters.SearchFilter]
     search_fields = ["title", "description", "town", "suburb", "region"]

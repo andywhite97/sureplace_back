@@ -1,0 +1,11 @@
+{% extends "emails/base.html" %}
+{% block content %}
+{% include "emails/partials/status_icon.html" %}
+<h1 style="margin:18px 0 0 0;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:28px;line-height:34px;color:#152B2A;">Verify your email</h1>
+<p style="margin:14px 0 0 0;font-size:16px;line-height:24px;color:#647471;">Thanks for joining SurePlace. Confirm your email address to finish setting up your account.</p>
+{% include "emails/partials/button.html" %}
+<p style="margin:18px 0 0 0;font-size:14px;line-height:22px;color:#647471;">{{ expiry_text }}</p>
+<p style="margin:10px 0 0 0;font-size:14px;line-height:22px;color:#647471;">If the button does not work, copy and paste this link into your browser:</p>
+<p style="margin:8px 0 0 0;font-size:13px;line-height:20px;word-break:break-all;color:#152B2A;">{{ cta_url }}</p>
+<p style="margin:18px 0 0 0;font-size:14px;line-height:22px;color:#647471;">If you did not create a SurePlace account, you can ignore this email.</p>
+{% endblock %}

@@ -21,6 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "avatar",
             "is_email_verified",
+            "email_verified_at",
             "is_phone_verified",
             "onboarding_intents",
             "date_joined",
@@ -29,13 +30,34 @@ class UserSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
-            "email",
             "is_email_verified",
+            "email_verified_at",
             "is_phone_verified",
             "date_joined",
             "created_at",
             "updated_at",
         )
+
+    def validate_email(self, value):
+        normalized_email = User.objects.normalize_email(value).lower()
+        qs = User.objects.filter(email__iexact=normalized_email)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return normalized_email
+
+    def update(self, instance, validated_data):
+        old_email = instance.email
+        instance = super().update(instance, validated_data)
+        if "email" in validated_data and instance.email.lower() != old_email.lower():
+            instance.is_email_verified = False
+            instance.email_verified_at = None
+            instance.save(update_fields=["is_email_verified", "email_verified_at", "updated_at"])
+            from .email_verification import enqueue_verification_email_after_commit
+
+            enqueue_verification_email_after_commit(instance)
+        return instance
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -68,7 +90,19 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
+        validated_data["is_email_verified"] = False
         return User.objects.create_user(password=password, **validated_data)
+
+
+class EmailVerificationSerializer(serializers.Serializer):
+    token = serializers.CharField(trim_whitespace=False)
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return User.objects.normalize_email(value).lower()
 
 
 class ChangePasswordSerializer(serializers.Serializer):

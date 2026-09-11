@@ -9,13 +9,14 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
+from accounts.permissions import IsEmailVerified
 from .models import *
 from .serializers import *
 from .services import can_manage, pause, room_availability, submit
 
 
 class StayViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsEmailVerified]
 
     def get_queryset(self):
         action = getattr(self, "action", None)
@@ -248,7 +249,7 @@ class StayViewSet(viewsets.ModelViewSet):
 class RoomViewSet(viewsets.ModelViewSet):
     queryset = RoomType.objects.select_related("stay").prefetch_related("images")
     serializer_class = RoomSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsEmailVerified]
 
     def get_serializer_class(self):
         return RoomWriteSerializer if self.action in ("update", "partial_update") else RoomSerializer

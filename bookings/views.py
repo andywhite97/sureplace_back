@@ -5,6 +5,7 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+from accounts.permissions import IsEmailVerified
 from properties.models import PropertyListing, ListingStatus
 from properties.permissions import can_manage_property
 from messaging.services import create_conversation, system_message
@@ -15,7 +16,7 @@ from .services import create_booking, transition
 
 class ViewingViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ViewingSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsEmailVerified]
 
     def get_queryset(self):
         qs = ViewingRequest.objects.filter(
@@ -87,7 +88,7 @@ class ViewingViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.IsAuthenticated, IsEmailVerified])
 def create_viewing(request, property_id):
     prop = PropertyListing.objects.get(id=property_id)
     if prop.status != ListingStatus.PUBLISHED or prop.owner_id == request.user.id:
@@ -123,7 +124,7 @@ def create_viewing(request, property_id):
 
 class BookingViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BookingSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsEmailVerified]
     lookup_field = "id"
 
     def get_queryset(self):
@@ -175,7 +176,7 @@ class BookingViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.IsAuthenticated, IsEmailVerified])
 def create_stay_booking(request, stay_id):
     from stays.models import Stay, RoomType
 

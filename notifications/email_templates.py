@@ -65,6 +65,14 @@ TEMPLATES: dict[str, EmailTemplateDefinition] = {
         default_cta_label="Reset Password",
         status="info",
     ),
+    "auth.verify_email": EmailTemplateDefinition(
+        subject="Verify your SurePlace email",
+        html_template="emails/auth/verify_email.html",
+        text_template="emails/auth/verify_email.txt",
+        preheader="Confirm your email address to finish setting up your SurePlace account.",
+        default_cta_label="Verify Email",
+        status="info",
+    ),
     "system.email_diagnostic": EmailTemplateDefinition(
         subject="SurePlace email delivery test",
         html_template="emails/system/email_diagnostic.html",
@@ -307,6 +315,12 @@ def sample_context(template_key: str) -> dict[str, Any]:
             "message": "A password reset was requested for your SurePlace account.",
             "cta_url": "/reset-password?uid=sample&token=sample-token",
             "expiry_text": "For your security, this reset link will expire after a limited time.",
+        },
+        "auth.verify_email": {
+            "headline": "Verify your email",
+            "message": "Thanks for joining SurePlace. Confirm your email address to finish setting up your account.",
+            "cta_url": "/verify-email?token=sample-token",
+            "expiry_text": "This link expires in 24 hours.",
         },
         "system.email_diagnostic": {
             "headline": "SurePlace email delivery test",

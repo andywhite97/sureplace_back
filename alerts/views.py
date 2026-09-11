@@ -1,6 +1,7 @@
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from accounts.permissions import IsEmailVerified
 from properties.serializers import PropertyListSerializer
 from stays.serializers import StayListSerializer
 from favourites.models import Favourite
@@ -11,7 +12,7 @@ from .services import evaluate, matches
 
 class SavedSearchViewSet(viewsets.ModelViewSet):
     serializer_class = SavedSearchSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsEmailVerified]
 
     def get_queryset(self):
         return SavedSearch.objects.filter(user=self.request.user)

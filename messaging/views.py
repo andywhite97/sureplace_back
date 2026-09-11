@@ -5,6 +5,7 @@ from rest_framework.decorators import action, api_view, permission_classes, thro
 from rest_framework.exceptions import PermissionDenied, ValidationError as APIValidationError
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
+from accounts.permissions import IsEmailVerified
 from .models import *
 from .serializers import *
 from .services import can_access, notify_message
@@ -12,7 +13,7 @@ from .services import can_access, notify_message
 
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsEmailVerified]
 
     def get_queryset(self):
         u = self.request.user
@@ -86,7 +87,7 @@ def guest_enquiry(request):
 
 class MessageViewSet(viewsets.GenericViewSet):
     queryset = Message.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsEmailVerified]
 
     @action(detail=True, methods=["delete"])
     def remove(self, request, pk=None):

@@ -3,6 +3,7 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+from accounts.permissions import IsEmailVerified
 from .models import *
 from .serializers import *
 from .services import authorized, review, submit, suspend
@@ -19,7 +20,7 @@ class CanReviewVerification(permissions.BasePermission):
 
 class RequestViewSet(viewsets.ModelViewSet):
     serializer_class = RequestSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsEmailVerified]
 
     def get_queryset(self):
         return VerificationRequest.objects.filter(applicant=self.request.user).select_related(
@@ -92,7 +93,7 @@ def download_document(r, document_id):
 
 
 @api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.IsAuthenticated, IsEmailVerified])
 def delete_document(r, document_id):
     d = VerificationDocument.objects.select_related("verification_request").get(pk=document_id)
     if not authorized(r.user, d.verification_request):

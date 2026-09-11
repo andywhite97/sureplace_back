@@ -64,6 +64,7 @@ BIRD_API_BASE_URL=
 BIRD_REQUEST_TIMEOUT_SECONDS=10
 DEFAULT_REPLY_TO_EMAIL=
 EMAIL_LOGO_URL=
+EMAIL_VERIFICATION_TTL_SECONDS=86400
 BIRD_TRACK_OPENS=false
 BIRD_TRACK_CLICKS=false
 ```
@@ -140,6 +141,37 @@ can duplicate uncertain deliveries.
 
 Password reset uses the same provider abstraction and still keeps Django's reset
 token generation and account-enumeration-safe response.
+
+## Email Verification
+
+Registration creates users with `is_email_verified=false` and queues only the
+`auth.verify_email` transactional email after the database transaction commits.
+Welcome email (`auth.welcome`) is sent once, after the first successful email
+verification transition.
+
+Verification links use `FRONTEND_BASE_URL` and the public Angular route:
+
+```text
+/verify-email?token=<signed-token>
+```
+
+The signed token is purpose-specific, contains only user ID, email, and purpose,
+and expires after `EMAIL_VERIFICATION_TTL_SECONDS` (default 24 hours). Tokens are
+naturally invalidated by email changes because the signed email must still match
+the current user email.
+
+API endpoints:
+
+- `POST /api/v1/auth/verify-email/` with `{ "token": "..." }`
+- `POST /api/v1/auth/resend-verification/` with `{ "email": "user@example.com" }`
+
+The resend endpoint always returns a generic response and does not reveal whether
+an account exists, is verified, or is disabled. Verification and resend use the
+`email_verification` DRF throttle scope.
+
+Sensitive authenticated write actions return `403` with code
+`email_not_verified` until the user verifies email. Public browsing, login,
+password reset, verification, and resend remain available.
 
 ## Email Provider Diagnostics
 
