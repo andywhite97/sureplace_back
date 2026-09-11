@@ -30,7 +30,7 @@ class AuthenticationTests(APITestCase):
     @override_settings(
         EMAIL_PROVIDER="django",
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
-        CELERY_TASK_ALWAYS_EAGER=True,
+        CELERY_TASK_ALWAYS_EAGER=False,
     )
     def test_registration_sends_welcome_email(self):
         response = self.client.post(reverse("accounts:register"), self.payload, format="json")

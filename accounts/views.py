@@ -38,10 +38,10 @@ class RegisterView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save()
-        from notifications.services import enqueue_transactional_email
+        from notifications.services import send_transactional_email
 
         transaction.on_commit(
-            lambda: enqueue_transactional_email(
+            lambda: send_transactional_email(
                 user.email,
                 "Welcome to SurePlace",
                 (
