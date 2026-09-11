@@ -15,6 +15,7 @@ from .email_providers import (
     RetryableEmailProviderError,
     build_email_message,
     get_email_provider,
+    sanitize_bird_tag_value,
 )
 from .models import EmailDelivery
 from .services import send_transactional_email
@@ -97,6 +98,47 @@ class BirdEmailProviderTests(TestCase):
         self.assertEqual(captured["payload"]["tags"], [{"name": "category", "value": "password_reset"}])
         self.assertEqual(result.provider_message_id, "em_test_123")
         self.assertEqual(result.status, "accepted")
+
+    def test_bird_tag_values_are_sanitized_without_changing_internal_values(self):
+        self.assertEqual(sanitize_bird_tag_value("auth.welcome"), "auth_welcome")
+        self.assertEqual(sanitize_bird_tag_value("tag with spaces"), "tag_with_spaces")
+        self.assertEqual(sanitize_bird_tag_value("alerts/path/value"), "alerts_path_value")
+        self.assertEqual(sanitize_bird_tag_value("already-valid_123"), "already-valid_123")
+        self.assertEqual(sanitize_bird_tag_value("  ...///  "), "tag")
+        self.assertEqual(sanitize_bird_tag_value("___"), "tag")
+
+    @override_settings(
+        EMAIL_PROVIDER="bird",
+        BIRD_API_KEY="bk_eu1_test",
+        DEFAULT_FROM_EMAIL="SurePlace <noreply@sureplace.co.sz>",
+    )
+    def test_bird_payload_sanitizes_generated_tag_values(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return _Response()
+
+        message = build_email_message(
+            "user@example.test",
+            "Welcome",
+            "Text",
+            tags={
+                "category": "auth.welcome",
+                "spaces": "tag with spaces",
+                "slashes": "alerts/path/value",
+                "valid": "already-valid_123",
+                "empty": "...///",
+            },
+        )
+        with patch("notifications.email_providers.urlopen", fake_urlopen):
+            result = get_email_provider().send(message)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(
+            [tag["value"] for tag in captured["payload"]["tags"]],
+            ["auth_welcome", "tag_with_spaces", "alerts_path_value", "already-valid_123", "tag"],
+        )
 
     @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="", BIRD_API_BASE_URL="")
     def test_bird_missing_configuration_fails_clearly(self):

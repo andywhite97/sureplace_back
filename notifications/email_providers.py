@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import socket
 import uuid
 from dataclasses import dataclass, field
@@ -50,7 +51,7 @@ class EmailProviderResult:
 class EmailProviderError(Exception):
     retryable = False
 
-    def __init__(self, message: str, *, status_code: int | None = None, code: str = "", request_id: str = ""):
+    def __init__(self, message: str, *, status_code: int | None=None, code: str="", request_id: str=""):
         super().__init__(message)
         self.status_code = status_code
         self.code = code
@@ -162,7 +163,9 @@ class BirdEmailProvider(EmailProvider):
         if message.reply_to:
             payload["reply_to"] = [_address_payload(address) for address in message.reply_to]
         if message.tags:
-            payload["tags"] = [{"name": key, "value": value} for key, value in message.tags.items()]
+            payload["tags"] = [
+                {"name": key, "value": sanitize_bird_tag_value(value)} for key, value in message.tags.items()
+            ]
         if message.metadata:
             payload["metadata"] = message.metadata
         return payload
@@ -274,6 +277,12 @@ def _address_payload(address: EmailAddress) -> dict[str, str]:
     return payload
 
 
+def sanitize_bird_tag_value(value: Any) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9_-]+", "_", str(value or ""))
+    sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+    return sanitized or "tag"
+
+
 def _read_json(body: bytes) -> dict[str, Any]:
     if not body:
         return {}
@@ -316,7 +325,7 @@ def _safe_error_details(body: dict[str, Any]) -> tuple[str, str, str, list[str]]
     return _safe_error_value(code, 100), _safe_error_value(message, 500), _safe_error_value(request_id, 120), details
 
 
-def _safe_error_value(value: Any, limit: int = 500) -> str:
+def _safe_error_value(value: Any, limit: int=500) -> str:
     text = str(value or "")
     text = " ".join(text.split())
     return text[:limit]
