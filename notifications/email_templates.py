@@ -73,6 +73,14 @@ TEMPLATES: dict[str, EmailTemplateDefinition] = {
         default_cta_label="Verify Email",
         status="info",
     ),
+    "agency.invitation": EmailTemplateDefinition(
+        subject=lambda c: f"You're invited to join {value('agency.name', 'an agency')(c)} on SurePlace",
+        html_template="emails/agency/invitation.html",
+        text_template="emails/agency/invitation.txt",
+        preheader=lambda c: f"{value('inviter_name', 'Someone')(c)} invited you to join {value('agency.name', 'an agency')(c)}.",
+        default_cta_label="Accept Invitation",
+        status="info",
+    ),
     "system.email_diagnostic": EmailTemplateDefinition(
         subject="SurePlace email delivery test",
         html_template="emails/system/email_diagnostic.html",
@@ -321,6 +329,15 @@ def sample_context(template_key: str) -> dict[str, Any]:
             "message": "Thanks for joining SurePlace. Confirm your email address to finish setting up your account.",
             "cta_url": "/verify-email?token=sample-token",
             "expiry_text": "This link expires in 24 hours.",
+        },
+        "agency.invitation": {
+            "headline": "Join Lusito Estates",
+            "message": "Nomsa invited you to join Lusito Estates as Agent.",
+            "agency": {"name": "Lusito Estates"},
+            "inviter_name": "Nomsa Dlamini",
+            "role": "Agent",
+            "cta_url": "/agency-invitations/accept?token=sample-token",
+            "expiry_text": "This invitation expires soon.",
         },
         "system.email_diagnostic": {
             "headline": "SurePlace email delivery test",

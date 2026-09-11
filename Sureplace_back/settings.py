@@ -131,6 +131,8 @@ REST_FRAMEWORK = {
         "auth_login": env("THROTTLE_AUTH_LOGIN", default="20/hour"),
         "password_reset": env("THROTTLE_PASSWORD_RESET", default="5/hour"),
         "email_verification": env("THROTTLE_EMAIL_VERIFICATION", default="5/minute"),
+        "agency_management": env("THROTTLE_AGENCY_MANAGEMENT", default="60/hour"),
+        "agency_invitation": env("THROTTLE_AGENCY_INVITATION", default="20/hour"),
         "guest_enquiry": env("THROTTLE_GUEST_ENQUIRY", default="10/hour"),
         "internal_message": env("THROTTLE_INTERNAL_MESSAGE", default="120/hour"),
         "viewing_request": env("THROTTLE_VIEWING_REQUEST", default="20/hour"),
@@ -167,6 +169,7 @@ DEFAULT_FROM_NAME = env("DEFAULT_FROM_NAME", default="SurePlace")
 DEFAULT_REPLY_TO_EMAIL = env("DEFAULT_REPLY_TO_EMAIL", default="")
 EMAIL_LOGO_URL = env("EMAIL_LOGO_URL", default="")
 EMAIL_VERIFICATION_TTL_SECONDS = env.int("EMAIL_VERIFICATION_TTL_SECONDS", default=86400)
+AGENCY_INVITATION_TTL_DAYS = env.int("AGENCY_INVITATION_TTL_DAYS", default=7)
 BIRD_API_KEY = env("BIRD_API_KEY", default="")
 BIRD_API_BASE_URL = env("BIRD_API_BASE_URL", default="")
 BIRD_REQUEST_TIMEOUT_SECONDS = env.int("BIRD_REQUEST_TIMEOUT_SECONDS", default=10)

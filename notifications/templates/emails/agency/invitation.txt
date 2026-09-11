@@ -1,0 +1,12 @@
+{% extends "emails/base.txt" %}
+{% block content %}
+{{ headline }}
+
+{{ inviter_name }} invited you to join {{ agency.name }} as {{ role }}.
+
+{{ cta_label }}: {{ cta_url }}
+
+{{ expiry_text }}
+
+If you were not expecting this invitation, you can ignore this email.
+{% endblock %}

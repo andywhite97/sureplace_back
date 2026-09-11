@@ -1,0 +1,9 @@
+{% extends "emails/base.html" %}
+{% block content %}
+{% include "emails/partials/status_icon.html" %}
+<h1 style="margin:18px 0 0 0;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:28px;line-height:34px;color:#152B2A;">{{ headline }}</h1>
+<p style="margin:14px 0 0 0;font-size:16px;line-height:24px;color:#647471;">{{ inviter_name }} invited you to join {{ agency.name }} as {{ role }}.</p>
+{% include "emails/partials/button.html" %}
+<p style="margin:18px 0 0 0;font-size:14px;line-height:22px;color:#647471;">{{ expiry_text }}</p>
+<p style="margin:10px 0 0 0;font-size:14px;line-height:22px;color:#647471;">If you were not expecting this invitation, you can ignore this email.</p>
+{% endblock %}
