@@ -50,10 +50,11 @@ class EmailProviderResult:
 class EmailProviderError(Exception):
     retryable = False
 
-    def __init__(self, message: str, *, status_code: int | None=None, code: str=""):
+    def __init__(self, message: str, *, status_code: int | None = None, code: str = "", request_id: str = ""):
         super().__init__(message)
         self.status_code = status_code
         self.code = code
+        self.request_id = request_id
         self.safe_message = message
 
 
@@ -284,13 +285,38 @@ def _read_json(body: bytes) -> dict[str, Any]:
 
 
 def _bird_error(status_code: int, body: dict[str, Any]) -> EmailProviderError:
-    code, message = _safe_error_details(body)
+    code, message, request_id, details = _safe_error_details(body)
+    if details:
+        message = "\n".join([message, *details]) if message else "\n".join(details)
+    message = _safe_error_value(message, 500)
     error_cls = RetryableEmailProviderError if status_code == 429 or status_code >= 500 else PermanentEmailProviderError
-    return error_cls(message or "Bird email request was rejected.", status_code=status_code, code=code)
+    return error_cls(
+        message or "Bird email request was rejected.",
+        status_code=status_code,
+        code=code,
+        request_id=request_id,
+    )
 
 
-def _safe_error_details(body: dict[str, Any]) -> tuple[str, str]:
+def _safe_error_details(body: dict[str, Any]) -> tuple[str, str, str, list[str]]:
     error = body.get("error") if isinstance(body.get("error"), dict) else body
     code = str(error.get("code", "")) if isinstance(error, dict) else ""
     message = str(error.get("message", "")) if isinstance(error, dict) else ""
-    return code[:100], message[:500]
+    request_id = str(error.get("request_id", "")) if isinstance(error, dict) else ""
+    details = []
+    raw_details = error.get("details", []) if isinstance(error, dict) else []
+    if isinstance(raw_details, list):
+        for detail in raw_details:
+            if not isinstance(detail, dict):
+                continue
+            param = _safe_error_value(detail.get("param"))
+            detail_message = _safe_error_value(detail.get("message"))
+            if param and detail_message:
+                details.append(f"{param}: {detail_message}")
+    return _safe_error_value(code, 100), _safe_error_value(message, 500), _safe_error_value(request_id, 120), details
+
+
+def _safe_error_value(value: Any, limit: int = 500) -> str:
+    text = str(value or "")
+    text = " ".join(text.split())
+    return text[:limit]

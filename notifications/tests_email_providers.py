@@ -138,13 +138,84 @@ class BirdEmailProviderTests(TestCase):
             with self.assertRaises(PermanentEmailProviderError):
                 BirdEmailProvider().send(message)
 
-    def _http_error(self, status_code):
+    @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_eu1_test")
+    def test_bird_validation_error_preserves_one_safe_detail_and_request_id(self):
+        response = self._http_error(
+            422,
+            {
+                "error": {
+                    "code": "E01001",
+                    "message": "Request has 1 validation error.",
+                    "request_id": "req_test_123",
+                    "details": [{"param": "from.email", "message": "must be a valid email address"}],
+                }
+            },
+        )
+        with patch("notifications.email_providers.urlopen", side_effect=response):
+            with self.assertRaises(PermanentEmailProviderError) as caught:
+                BirdEmailProvider().send(build_email_message("user@example.test", "Subject", "Text"))
+
+        self.assertEqual(caught.exception.code, "E01001")
+        self.assertEqual(caught.exception.request_id, "req_test_123")
+        self.assertEqual(
+            str(caught.exception),
+            "Request has 1 validation error.\nfrom.email: must be a valid email address",
+        )
+
+    @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_eu1_test")
+    def test_bird_validation_error_preserves_multiple_safe_details(self):
+        response = self._http_error(
+            422,
+            {
+                "error": {
+                    "code": "E01001",
+                    "message": "Request has 2 validation errors.",
+                    "details": [
+                        {"param": "from.email", "message": "must be a valid email address"},
+                        {"param": "to[0].email", "message": "must be a valid email address"},
+                    ],
+                }
+            },
+        )
+        with patch("notifications.email_providers.urlopen", side_effect=response):
+            with self.assertRaises(PermanentEmailProviderError) as caught:
+                BirdEmailProvider().send(build_email_message("user@example.test", "Subject", "Text"))
+
+        self.assertIn("from.email: must be a valid email address", str(caught.exception))
+        self.assertIn("to[0].email: must be a valid email address", str(caught.exception))
+
+    @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_eu1_test")
+    def test_bird_validation_error_handles_missing_details(self):
+        response = self._http_error(
+            422,
+            {"error": {"code": "E01001", "message": "Request has 1 validation error."}},
+        )
+        with patch("notifications.email_providers.urlopen", side_effect=response):
+            with self.assertRaises(PermanentEmailProviderError) as caught:
+                BirdEmailProvider().send(build_email_message("user@example.test", "Subject", "Text"))
+
+        self.assertEqual(str(caught.exception), "Request has 1 validation error.")
+
+    @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_eu1_test")
+    def test_bird_validation_error_handles_malformed_response_without_secrets(self):
+        secret = "reset-token-and-api-key"
+        response = self._http_error(422, raw_body=f"not-json {secret}".encode())
+        with patch("notifications.email_providers.urlopen", side_effect=response):
+            with self.assertRaises(PermanentEmailProviderError) as caught:
+                BirdEmailProvider().send(build_email_message("user@example.test", "Subject", "Text"))
+
+        self.assertEqual(str(caught.exception), "Bird email request was rejected.")
+        self.assertNotIn(secret, str(caught.exception))
+
+    def _http_error(self, status_code, body=None, raw_body=None):
+        if raw_body is None:
+            raw_body = json.dumps(body or {"error": {"code": "validation_error", "message": "Invalid sender"}}).encode()
         return HTTPError(
             "https://us1.platform.bird.com/v1/email/messages",
             status_code,
             "error",
             {},
-            BytesIO(b'{"error":{"code":"validation_error","message":"Invalid sender"}}'),
+            BytesIO(raw_body),
         )
 
 

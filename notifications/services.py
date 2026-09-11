@@ -132,13 +132,14 @@ def send_email_delivery(
         delivery.status = EmailDelivery.Status.FAILED
         delivery.save(update_fields=["last_error_code", "last_error_message", "failed_at", "status"])
         logger.warning(
-            "email_delivery_failed provider=%s template_key=%s delivery_id=%s recipient=%s status_code=%s code=%s",
+            "email_delivery_failed provider=%s template_key=%s delivery_id=%s recipient=%s status_code=%s code=%s request_id=%s",
             delivery.provider,
             delivery.template_key,
             delivery.id,
             mask_email(delivery.recipient),
             exc.status_code,
             exc.code,
+            exc.request_id,
         )
         raise
     delivery.provider = result.provider
