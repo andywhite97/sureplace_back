@@ -33,7 +33,26 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         if not settings.FEATURE_FLAGS["registration"]:
             return Response({"detail": "Registration is temporarily unavailable."}, status=503)
-        return super().create(request, *args, **kwargs)
+        with transaction.atomic():
+            return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        from notifications.services import enqueue_transactional_email
+
+        transaction.on_commit(
+            lambda: enqueue_transactional_email(
+                user.email,
+                "Welcome to SurePlace",
+                (
+                    "Your account is ready. You can now explore properties, save favourites, "
+                    "request viewings, book stays, and message hosts or agents."
+                ),
+                "/properties",
+                template_key="auth.welcome",
+                tags={"category": "auth.welcome"},
+            )
+        )
 
 
 class MeView(generics.RetrieveUpdateAPIView):

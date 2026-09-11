@@ -27,6 +27,20 @@ class AuthenticationTests(APITestCase):
         self.assertEqual(user.onboarding_intents, self.payload["onboarding_intents"])
         self.assertNotIn("password", response.data)
 
+    @override_settings(
+        EMAIL_PROVIDER="django",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        CELERY_TASK_ALWAYS_EAGER=True,
+    )
+    def test_registration_sends_welcome_email(self):
+        response = self.client.post(reverse("accounts:register"), self.payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.payload["email"]])
+        self.assertEqual(mail.outbox[0].subject, "Welcome to SurePlace")
+        self.assertEqual(EmailDelivery.objects.get().template_key, "auth.welcome")
+
     def test_duplicate_email_is_rejected_case_insensitively(self):
         User.objects.create_user(**self.payload)
         duplicate = {**self.payload, "email": "NOMSA@example.com"}
