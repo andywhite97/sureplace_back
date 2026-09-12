@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 ALLOWED = {
     "route",
+    "action",
+    "action_label",
+    "status",
     "conversation_id",
     "property_id",
     "property_slug",

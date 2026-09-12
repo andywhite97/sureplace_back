@@ -4,6 +4,7 @@ from rest_framework.test import APITestCase
 from accounts.models import User
 from .models import EmailDelivery, NotificationPreference, NotificationType
 from .services import create_notification, notify_transactional, send_transactional_email
+from properties.models import ListingStatus, ListingType, PropertyListing, PropertyType
 
 
 class NotificationTests(APITestCase):
@@ -36,6 +37,57 @@ class NotificationTests(APITestCase):
         self.assertEqual(self.client.get("/api/notifications/unread-count/").data["unread_count"], 1)
         self.assertEqual(self.client.post(f"/api/notifications/{n.id}/mark-read/").status_code, 200)
         self.assertEqual(self.client.post("/api/notifications/mark-all-read/").status_code, 200)
+
+    def test_listing_status_action_normalizes_legacy_approved_edit_route(self):
+        listing = PropertyListing.objects.create(
+            owner=self.user,
+            title="Approved home",
+            description="A published listing with enough detail. " * 4,
+            listing_type=ListingType.RENT,
+            property_type=PropertyType.HOUSE,
+            price=5000,
+            region="Hhohho",
+            town="Mbabane",
+            location={"latitude": -26.305, "longitude": 31.136},
+            status=ListingStatus.PUBLISHED,
+        )
+        notification = create_notification(
+            self.user,
+            NotificationType.LISTING_STATUS_UPDATE,
+            "Listing approved",
+            "Approved",
+            {"route": f"/account/manage/properties/{listing.id}/edit", "status": "PUBLISHED"},
+            "approved:legacy",
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.get(f"/api/notifications/{notification.id}/")
+        self.assertEqual(response.data["action"], {"label": "View listing", "url": f"/properties/{listing.slug}"})
+
+    def test_notification_action_rejects_external_route(self):
+        notification = create_notification(
+            self.user,
+            NotificationType.SYSTEM,
+            "Unsafe",
+            "No",
+            {"route": "https://evil.example/path"},
+            "unsafe",
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.get(f"/api/notifications/{notification.id}/")
+        self.assertIsNone(response.data["action"])
+
+    def test_missing_property_target_falls_back_to_management(self):
+        notification = create_notification(
+            self.user,
+            NotificationType.LISTING_STATUS_UPDATE,
+            "Listing rejected",
+            "Rejected",
+            {"action": "PROPERTY_REJECTED", "property_id": "00000000-0000-0000-0000-000000000000"},
+            "missing-property",
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.get(f"/api/notifications/{notification.id}/")
+        self.assertEqual(response.data["action"]["url"], "/account/manage/properties")
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_email_service(self):

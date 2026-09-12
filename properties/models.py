@@ -37,6 +37,7 @@ class ListingStatus(models.TextChoices):
     SUBMITTED = "SUBMITTED", "Submitted"
     UNDER_REVIEW = "UNDER_REVIEW", "Under review"
     PUBLISHED = "PUBLISHED", "Published"
+    CHANGES_REQUESTED = "CHANGES_REQUESTED", "Changes requested"
     PAUSED = "PAUSED", "Paused"
     EXPIRED = "EXPIRED", "Expired"
     REJECTED = "REJECTED", "Rejected"
@@ -101,7 +102,7 @@ class PropertyListing(TimeStampedModel):
     furnished = models.BooleanField(default=False)
     pet_friendly = models.BooleanField(default=False)
     amenities = models.ManyToManyField(Amenity, blank=True, related_name="properties")
-    status = models.CharField(max_length=16, choices=ListingStatus.choices, default=ListingStatus.DRAFT)
+    status = models.CharField(max_length=24, choices=ListingStatus.choices, default=ListingStatus.DRAFT)
     verification_status = models.CharField(
         max_length=16, choices=VerificationStatus.choices, default=VerificationStatus.UNVERIFIED
     )
@@ -115,6 +116,15 @@ class PropertyListing(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("review_propertylisting", "Can review property listings"),
+            ("approve_propertylisting", "Can approve property listings"),
+            ("request_changes_propertylisting", "Can request changes on property listings"),
+            ("reject_propertylisting", "Can reject property listings"),
+            ("suspend_propertylisting", "Can suspend property listings"),
+            ("restore_propertylisting", "Can restore property listings"),
+            ("add_note_propertylisting", "Can add property moderation notes"),
+        ]
         indexes = [
             models.Index(fields=["status", "-created_at"]),
             models.Index(fields=["status", "-published_at"]),

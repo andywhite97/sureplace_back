@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, Value, BooleanField
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
-from rest_framework import filters, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -22,7 +22,7 @@ from .serializers import (
     PropertyListSerializer,
     PropertyWriteSerializer,
 )
-from .services import confirm_availability, pause_listing, submit_listing
+from .services import InvalidListingTransition, confirm_availability, pause_listing, submit_listing
 
 
 def _truthy(value):
@@ -209,6 +209,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
         listing = self.get_object()
         try:
             service(listing)
+        except InvalidListingTransition as exc:
+            return Response(exc.detail, status=status.HTTP_409_CONFLICT)
         except Exception as exc:
             if hasattr(exc, "message_dict"):
                 raise ValidationError(exc.message_dict) from exc

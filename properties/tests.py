@@ -111,7 +111,7 @@ class PropertyModelTests(TestCase):
         high = listing_quality(listing)
         self.assertEqual(listing.amenities.count(), 3)
         self.assertGreater(high["score"], low["score"])
-        self.assertNotIn("Add at least 5 photos", high["suggestions"])
+        self.assertNotIn("Add more photos to improve your listing", high["suggestions"])
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
@@ -266,6 +266,13 @@ class PropertyAPITests(APITestCase):
         self.assertEqual(self.published.status, ListingStatus.PAUSED)
         self.assertEqual(self.published.availability_status, AvailabilityStatus.AVAILABLE)
         self.assertIsNotNone(self.published.availability_confirmed_at)
+
+    def test_published_listing_submit_is_rejected_with_structured_transition_error(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(f"/api/properties/{self.published.id}/submit/")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.data)
+        self.assertEqual(response.data["code"], "invalid_listing_transition")
+        self.assertIn("already approved and published", response.data["detail"])
 
     def test_owner_detail_includes_quality(self):
         self.client.force_authenticate(self.owner)
