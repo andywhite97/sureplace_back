@@ -1,5 +1,12 @@
+import shutil
+import tempfile
+from io import BytesIO
+
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.test import override_settings
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
@@ -43,6 +50,12 @@ def make_listing(owner, **overrides):
     longitude = data.pop("longitude")
     data["location"] = {"latitude": latitude, "longitude": longitude}
     return PropertyListing.objects.create(owner=owner, **data)
+
+
+def image_file(name="photo.png"):
+    buffer = BytesIO()
+    Image.new("RGB", (1, 1), color=(0, 128, 128)).save(buffer, format="PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
 
 
 class PropertyModelTests(TestCase):
@@ -101,13 +114,28 @@ class PropertyModelTests(TestCase):
         self.assertNotIn("Add at least 5 photos", high["suggestions"])
 
 
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class PropertyAPITests(APITestCase):
+    @classmethod
+    def tearDownClass(cls):
+        media_root = cls._overridden_settings["MEDIA_ROOT"]
+        super().tearDownClass()
+        shutil.rmtree(media_root, ignore_errors=True)
+
     def setUp(self):
         self.owner = User.objects.create_user(
-            email="owner@example.com", password="StrongPass123!", first_name="Owner", last_name="One"
+            email="owner@example.com",
+            password="StrongPass123!",
+            first_name="Owner",
+            last_name="One",
+            is_email_verified=True,
         )
         self.other = User.objects.create_user(
-            email="other@example.com", password="StrongPass123!", first_name="Other", last_name="User"
+            email="other@example.com",
+            password="StrongPass123!",
+            first_name="Other",
+            last_name="User",
+            is_email_verified=True,
         )
         self.published = make_listing(
             self.owner,
@@ -166,7 +194,11 @@ class PropertyAPITests(APITestCase):
         agent = AgentProfile.objects.create(user=self.other, agency=agency)
         listing = make_listing(self.owner, agency=agency, agent=agent)
         colleague = User.objects.create_user(
-            email="staff@example.com", password="StrongPass123!", first_name="Staff", last_name="Member"
+            email="staff@example.com",
+            password="StrongPass123!",
+            first_name="Staff",
+            last_name="Member",
+            is_email_verified=True,
         )
         AgentProfile.objects.create(user=colleague, agency=agency)
         for user in (self.other, colleague):
@@ -248,3 +280,95 @@ class PropertyAPITests(APITestCase):
         self.assertIn(str(self.published.id), ids)
         self.assertIn(str(self.draft.id), ids)
         self.assertIn("quality", response.data["results"][0])
+
+    def test_multiple_image_uploads_keep_first_default_cover(self):
+        self.client.force_authenticate(self.owner)
+
+        first = self.client.post(
+            f"/api/properties/{self.draft.id}/images/",
+            {"image": image_file("first.png"), "sort_order": 0},
+            format="multipart",
+        )
+        second = self.client.post(
+            f"/api/properties/{self.draft.id}/images/",
+            {"image": image_file("second.png"), "sort_order": 1, "is_cover": "true"},
+            format="multipart",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
+        images = list(self.draft.images.order_by("sort_order", "created_at"))
+        self.assertEqual(len(images), 2)
+        self.assertEqual([image.sort_order for image in images], [0, 1])
+        self.assertTrue(images[0].is_cover)
+        self.assertFalse(images[1].is_cover)
+        self.assertEqual(self.draft.images.filter(is_cover=True).count(), 1)
+        self.assertTrue(images[0].image.name)
+
+    def test_set_cover_preserves_order_and_keeps_one_cover(self):
+        self.client.force_authenticate(self.owner)
+        first = PropertyImage.objects.create(property=self.draft, image="properties/first.jpg", sort_order=0)
+        second = PropertyImage.objects.create(property=self.draft, image="properties/second.jpg", sort_order=1)
+        PropertyImage.objects.filter(pk=first.pk).update(is_cover=True)
+
+        response = self.client.patch(
+            f"/api/properties/{self.draft.id}/images/",
+            {"id": str(second.id), "is_cover": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.sort_order, 0)
+        self.assertFalse(first.is_cover)
+        self.assertEqual(second.sort_order, 1)
+        self.assertTrue(second.is_cover)
+        self.assertEqual(self.draft.images.filter(is_cover=True).count(), 1)
+
+    def test_reorder_preserves_cover_and_deleting_cover_promotes_first_remaining(self):
+        self.client.force_authenticate(self.owner)
+        first = PropertyImage.objects.create(property=self.draft, image="properties/first.jpg", sort_order=0)
+        second = PropertyImage.objects.create(property=self.draft, image="properties/second.jpg", sort_order=1)
+        third = PropertyImage.objects.create(property=self.draft, image="properties/third.jpg", sort_order=2)
+        PropertyImage.objects.filter(pk=second.pk).update(is_cover=True)
+
+        reorder = self.client.patch(
+            f"/api/properties/{self.draft.id}/images/",
+            {"id": str(third.id), "sort_order": 0},
+            format="json",
+        )
+        self.assertEqual(reorder.status_code, status.HTTP_200_OK, reorder.data)
+        third.refresh_from_db()
+        second.refresh_from_db()
+        first.refresh_from_db()
+        self.assertEqual(third.sort_order, 0)
+        self.assertFalse(third.is_cover)
+        self.assertEqual(first.sort_order, 1)
+        self.assertFalse(first.is_cover)
+        self.assertEqual(second.sort_order, 2)
+        self.assertTrue(second.is_cover)
+
+        delete = self.client.delete(f"/api/properties/{self.draft.id}/images/?id={second.id}")
+        self.assertEqual(delete.status_code, status.HTTP_204_NO_CONTENT)
+        third.refresh_from_db()
+        first.refresh_from_db()
+        self.assertEqual(third.sort_order, 0)
+        self.assertTrue(third.is_cover)
+        self.assertEqual(first.sort_order, 1)
+        self.assertFalse(first.is_cover)
+
+    def test_non_manager_cannot_upload_listing_image(self):
+        image = PropertyImage.objects.create(property=self.draft, image="properties/cover.jpg", sort_order=0)
+        self.client.force_authenticate(self.other)
+        response = self.client.post(
+            f"/api/properties/{self.draft.id}/images/",
+            {"image": image_file(), "sort_order": 0},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        set_cover = self.client.patch(
+            f"/api/properties/{self.draft.id}/images/",
+            {"id": str(image.id), "is_cover": True},
+            format="json",
+        )
+        self.assertEqual(set_cover.status_code, status.HTTP_403_FORBIDDEN)

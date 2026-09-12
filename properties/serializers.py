@@ -13,7 +13,18 @@ class AmenitySerializer(serializers.ModelSerializer):
         fields = ("id", "name", "slug", "icon", "category")
 
 
+class AbsoluteImageField(serializers.ImageField):
+    def to_representation(self, value):
+        url = super().to_representation(value)
+        request = self.context.get("request")
+        if url and request and not str(url).startswith(("http://", "https://")):
+            return request.build_absolute_uri(url)
+        return url
+
+
 class PropertyImageSerializer(serializers.ModelSerializer):
+    image = AbsoluteImageField()
+
     class Meta:
         model = PropertyImage
         fields = ("id", "image", "caption", "sort_order", "is_cover", "created_at")

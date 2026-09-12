@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, Value, BooleanField
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
@@ -15,8 +16,54 @@ from accounts.permissions import IsEmailVerified
 from .filters import PropertyFilter
 from .models import AvailabilityStatus, ListingStatus, PropertyImage, PropertyListing
 from .permissions import PropertyPermission, can_manage_property
-from .serializers import PropertyDetailSerializer, PropertyImageSerializer, PropertyListSerializer, PropertyWriteSerializer
+from .serializers import (
+    PropertyDetailSerializer,
+    PropertyImageSerializer,
+    PropertyListSerializer,
+    PropertyWriteSerializer,
+)
 from .services import confirm_availability, pause_listing, submit_listing
+
+
+def _truthy(value):
+    return str(value).lower() in {"1", "true", "yes", "on"}
+
+
+def _ordered_property_images(listing, ordered_ids=None):
+    images = list(listing.images.order_by("sort_order", "created_at"))
+    if ordered_ids is not None:
+        by_id = {image.pk: image for image in images}
+        images = [by_id[image_id] for image_id in ordered_ids if image_id in by_id]
+        used_ids = {image.pk for image in images}
+        images.extend(image for image in by_id.values() if image.pk not in used_ids)
+    return images
+
+
+def _normalize_property_image_order(listing, ordered_ids=None):
+    images = _ordered_property_images(listing, ordered_ids)
+    if not images:
+        return
+    with transaction.atomic():
+        for index, image in enumerate(images):
+            PropertyImage.objects.filter(pk=image.pk).update(sort_order=index)
+
+
+def ensure_property_cover(listing, preferred_cover_id=None):
+    images = _ordered_property_images(listing)
+    if not images:
+        return None
+    image_ids = {image.pk for image in images}
+    if preferred_cover_id in image_ids:
+        winner_id = preferred_cover_id
+    else:
+        covers = [image for image in images if image.is_cover]
+        if len(covers) == 1:
+            return covers[0]
+        winner_id = covers[0].pk if covers else images[0].pk
+    with transaction.atomic():
+        PropertyImage.objects.filter(property=listing).update(is_cover=False)
+        PropertyImage.objects.filter(pk=winner_id).update(is_cover=True)
+    return PropertyImage.objects.get(pk=winner_id)
 
 
 class PropertyViewSet(viewsets.ModelViewSet):
@@ -192,14 +239,38 @@ class PropertyViewSet(viewsets.ModelViewSet):
         if request.method == "POST":
             serializer = PropertyImageSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            image = serializer.save(property=listing)
-            return Response(PropertyImageSerializer(image).data, status=201)
+            image = serializer.save(property=listing, is_cover=False)
+            ordered_ids = None
+            if "sort_order" in request.data:
+                images = list(listing.images.exclude(pk=image.pk).order_by("sort_order", "created_at"))
+                index = min(max(image.sort_order, 0), len(images))
+                ordered_ids = [item.pk for item in images]
+                ordered_ids.insert(index, image.pk)
+            _normalize_property_image_order(listing, ordered_ids=ordered_ids)
+            ensure_property_cover(listing)
+            image.refresh_from_db()
+            return Response(
+                PropertyImageSerializer(image, context=self.get_serializer_context()).data,
+                status=201,
+            )
         image = get_object_or_404(listing.images, pk=request.data.get("id") or request.query_params.get("id"))
         if request.method == "DELETE":
             image.image.delete(save=False)
             image.delete()
+            _normalize_property_image_order(listing)
+            ensure_property_cover(listing)
             return Response(status=204)
+        cover_requested = _truthy(request.data.get("is_cover"))
         serializer = PropertyImageSerializer(image, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        image = serializer.save()
+        ordered_ids = None
+        if "sort_order" in request.data:
+            images = list(listing.images.exclude(pk=image.pk).order_by("sort_order", "created_at"))
+            index = min(max(image.sort_order, 0), len(images))
+            ordered_ids = [item.pk for item in images]
+            ordered_ids.insert(index, image.pk)
+            _normalize_property_image_order(listing, ordered_ids=ordered_ids)
+        ensure_property_cover(listing, image.pk if cover_requested else None)
+        image.refresh_from_db()
+        return Response(PropertyImageSerializer(image, context=self.get_serializer_context()).data)
