@@ -84,6 +84,7 @@ class Stay(TimeStampedModel):
     status = models.CharField(max_length=16, choices=StayStatus.choices, default=StayStatus.DRAFT)
     featured = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -170,6 +171,23 @@ class StayImage(OrderedCoverImage):
             super().save(*args, **kwargs)
 
 
+class BedConfiguration(models.TextChoices):
+    SINGLE = "SINGLE", "Single bed"
+    DOUBLE = "DOUBLE", "Double bed"
+    QUEEN = "QUEEN", "Queen bed"
+    KING = "KING", "King bed"
+    TWIN = "TWIN", "Twin beds"
+    QUEEN_TWIN = "QUEEN_TWIN", "Queen and twin beds"
+    BUNK = "BUNK", "Bunk beds"
+    OTHER = "OTHER", "Other configuration"
+
+
+class BathroomType(models.TextChoices):
+    PRIVATE = "PRIVATE", "Private bathroom"
+    SHARED = "SHARED", "Shared bathroom"
+    ENSUITE = "ENSUITE", "En-suite bathroom"
+
+
 class RoomType(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     stay = models.ForeignKey(Stay, on_delete=models.CASCADE, related_name="room_types")
@@ -218,11 +236,25 @@ class RoomTypeImage(OrderedCoverImage):
 
     def save(self, *args, **kwargs):
         with transaction.atomic():
+            RoomType.objects.select_for_update().get(pk=self.room_type_id)
+            siblings = type(self).objects.filter(room_type_id=self.room_type_id).exclude(pk=self.pk)
+            if not siblings.filter(is_cover=True).exists():
+                self.is_cover = True
             if self.is_cover:
-                type(self).objects.filter(room_type=self.room_type, is_cover=True).exclude(pk=self.pk).update(
-                    is_cover=False
-                )
+                siblings.filter(is_cover=True).update(is_cover=False)
             super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            RoomType.objects.select_for_update().get(pk=self.room_type_id)
+            result = super().delete(*args, **kwargs)
+            remaining = type(self).objects.filter(room_type_id=self.room_type_id)
+            if not remaining.filter(is_cover=True).exists():
+                fallback = remaining.first()
+                if fallback:
+                    fallback.is_cover = True
+                    fallback.save()
+            return result
 
 
 class RoomAvailability(TimeStampedModel):

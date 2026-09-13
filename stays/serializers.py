@@ -5,18 +5,25 @@ from .services import can_manage, quality
 
 
 class ImageSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = StayImage
         fields = ("id", "image", "caption", "sort_order", "is_cover", "created_at")
 
 
 class RoomImageSerializer(serializers.ModelSerializer):
+    def validate_image(self, value):
+        if value.image.format not in ("JPEG", "PNG", "WEBP"):
+            raise serializers.ValidationError("Unsupported image type. Choose JPG, PNG or WebP.")
+        return value
+
     class Meta:
         model = RoomTypeImage
         fields = ("id", "image", "caption", "sort_order", "is_cover", "created_at")
 
 
 class AmenitySerializer(serializers.ModelSerializer):
+
     class Meta:
         model = StayAmenity
         fields = ("id", "name", "slug", "icon", "category")
@@ -32,9 +39,30 @@ class RoomSerializer(serializers.ModelSerializer):
 
 
 class RoomWriteSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = RoomType
         exclude = ("stay",)
+        read_only_fields = ("slug",)
+
+    def validate_room_choice(self, value, field, choices):
+        # Free-text values saved by earlier clients remain editable without data loss.
+        if not value or value in choices.values:
+            return value
+        labels = {label.casefold(): key for key, label in choices.choices}
+        aliases = {"private": "PRIVATE", "shared": "SHARED", "en-suite": "ENSUITE", "queen and twin": "QUEEN_TWIN"}
+        canonical = labels.get(value.casefold()) or aliases.get(value.casefold())
+        if canonical in choices.values:
+            return canonical
+        if self.instance and value == getattr(self.instance, field):
+            return value
+        raise serializers.ValidationError("Select an available room option.")
+
+    def validate_bed_configuration(self, value):
+        return self.validate_room_choice(value, "bed_configuration", BedConfiguration)
+
+    def validate_bathroom_type(self, value):
+        return self.validate_room_choice(value, "bathroom_type", BathroomType)
 
     def validate(self, attrs):
         obj = self.instance or RoomType(stay=self.context["stay"])
@@ -133,7 +161,7 @@ class StayDetailSerializer(serializers.ModelSerializer):
         return quality(o) if can_manage(self.context["request"].user, o) else None
 
     def get_room_types(self, o):
-        return RoomSerializer(o.room_types.filter(is_active=True), many=True).data
+        return RoomSerializer(o.room_types.filter(is_active=True), many=True, context=self.context).data
 
     def get_verification_badges(self, o):
         return StayListSerializer().get_verification_badges(o)
@@ -155,7 +183,15 @@ class StayWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stay
         exclude = ("owner", "location")
-        read_only_fields = ("public_id", "slug", "status", "verification_status", "featured", "published_at")
+        read_only_fields = (
+            "public_id",
+            "slug",
+            "status",
+            "verification_status",
+            "featured",
+            "published_at",
+            "submitted_at",
+        )
 
     def validate(self, a):
         lat = a.pop("latitude", None)
@@ -189,6 +225,7 @@ class StayWriteSerializer(serializers.ModelSerializer):
 
 
 class AvailabilitySerializer(serializers.ModelSerializer):
+
     class Meta:
         model = RoomAvailability
         exclude = ("room_type",)

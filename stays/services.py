@@ -1,7 +1,11 @@
 from datetime import timedelta
 from decimal import Decimal
 from django.core.exceptions import ValidationError
-from .models import StayStatus
+from django.db import transaction
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError as ApiValidationError
+
+from .models import Stay, StayStatus
 
 
 def can_manage(user, stay):
@@ -72,13 +76,43 @@ def quality(stay):
     return {"score": sum(p for ok, p, _ in checks if ok), "suggestions": [s for ok, _, s in checks if not ok]}
 
 
+class StaySubmissionError(ApiValidationError):
+    def __init__(self, code, field, message):
+        self.default_code = code
+        super().__init__({field: [message]}, code=code)
+
+
+@transaction.atomic
 def submit(stay):
-    if stay.status not in (StayStatus.DRAFT, StayStatus.REJECTED):
-        raise ValidationError("Only draft or rejected stays can be submitted.")
-    stay.status = StayStatus.PUBLISHED
-    stay.full_clean()
-    stay.status = StayStatus.SUBMITTED
-    stay.save()
+    locked = Stay.objects.select_for_update().get(pk=stay.pk)
+    if locked.status in (StayStatus.SUBMITTED, StayStatus.UNDER_REVIEW):
+        stay.refresh_from_db()
+        return stay
+    if locked.status not in (StayStatus.DRAFT, StayStatus.REJECTED):
+        raise ApiValidationError({"status": "Only draft or rejected stays can be submitted."})
+    rooms = list(locked.room_types.filter(is_active=True))
+    if not rooms:
+        raise StaySubmissionError(
+            "room_type_required", "room_types", "Add at least one active room type before submitting this stay."
+        )
+    for room in rooms:
+        try:
+            room.full_clean()
+        except ValidationError as error:
+            raise StaySubmissionError(
+                "room_type_invalid", "room_types", f"Check {room.name}: {' '.join(error.messages)}"
+            ) from error
+    if not locked.location or not locked.region or not locked.town:
+        raise StaySubmissionError("missing_location", "location", "Add the stay region, town and map location.")
+    locked.status = StayStatus.PUBLISHED
+    try:
+        locked.full_clean()
+    except ValidationError as error:
+        raise ApiValidationError(error.message_dict if hasattr(error, "message_dict") else str(error)) from error
+    locked.status = StayStatus.SUBMITTED
+    locked.submitted_at = timezone.now()
+    locked.save()
+    stay.refresh_from_db()
     return stay
 
 

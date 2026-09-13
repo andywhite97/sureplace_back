@@ -220,13 +220,19 @@ class StayViewSet(viewsets.ModelViewSet):
     def rooms(self, request, pk=None):
         stay = self.get_object()
         if request.method == "GET":
-            return Response(RoomSerializer(stay.room_types.filter(is_active=True), many=True).data)
+            return Response(
+                RoomSerializer(
+                    stay.room_types.all() if can_manage(request.user, stay) else stay.room_types.filter(is_active=True),
+                    many=True,
+                    context={"request": request},
+                ).data
+            )
         if not can_manage(request.user, stay):
             raise PermissionDenied()
         s = RoomWriteSerializer(data=request.data, context={"stay": stay})
         s.is_valid(raise_exception=True)
         room = s.save(stay=stay)
-        return Response(RoomSerializer(room).data, status=201)
+        return Response(RoomSerializer(room, context={"request": request}).data, status=201)
 
     @action(detail=True, methods=["get"])
     def availability(self, request, pk=None):
@@ -298,16 +304,16 @@ class RoomViewSet(viewsets.ModelViewSet):
         if not can_manage(request.user, room.stay):
             raise PermissionDenied()
         if request.method == "POST":
-            s = RoomImageSerializer(data=request.data)
+            s = RoomImageSerializer(data=request.data, context={"request": request})
             s.is_valid(raise_exception=True)
             image = s.save(room_type=room)
-            return Response(RoomImageSerializer(image).data, status=201)
+            return Response(RoomImageSerializer(image, context={"request": request}).data, status=201)
         image = get_object_or_404(room.images, pk=request.data.get("id") or request.query_params.get("id"))
         if request.method == "DELETE":
             image.image.delete(save=False)
             image.delete()
             return Response(status=204)
-        s = RoomImageSerializer(image, data=request.data, partial=True)
+        s = RoomImageSerializer(image, data=request.data, partial=True, context={"request": request})
         s.is_valid(raise_exception=True)
         s.save()
         return Response(s.data)

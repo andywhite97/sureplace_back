@@ -30,7 +30,7 @@ def ready(request):
 
 
 def reference(request):
-    data = cache.get_or_set("public-reference:v1", reference_data, settings.PUBLIC_REFERENCE_CACHE_SECONDS)
+    data = cache.get_or_set("public-reference:v2", reference_data, settings.PUBLIC_REFERENCE_CACHE_SECONDS)
     response = JsonResponse(data)
     response["Cache-Control"] = f"public, max-age={settings.PUBLIC_REFERENCE_CACHE_SECONDS}"
     return response
