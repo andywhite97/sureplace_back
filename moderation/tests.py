@@ -197,3 +197,108 @@ class StaffPropertyModerationApiTests(APITestCase):
         self.client.force_authenticate(self.owner)
         detail = self.client.get(f"/api/notifications/{notification.id}/").data
         self.assertEqual(detail["action"], {"label": "View listing", "url": f"/properties/{self.published.slug}"})
+
+
+class StaffDashboardApiTests(APITestCase):
+    def setUp(self):
+        StaffPropertyModerationApiTests.setUp(self)
+
+    def test_summary_dashboard_is_staff_and_permission_protected(self):
+        self.assertIn(self.client.get("/api/v1/staff/properties/summary/").status_code, [401, 403])
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.client.get("/api/v1/staff/properties/summary/").status_code, 403)
+        self.client.force_authenticate(user("no-permission@example.com", True))
+        self.assertEqual(self.client.get("/api/v1/staff/properties/summary/").status_code, 403)
+
+    def test_dashboard_counts_queue_activity_and_private_fields(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from properties.models import PropertyImage
+        from verification.models import VerificationRequest, RequestStatus, VerificationType
+
+        self.staff.user_permissions.add(Permission.objects.get(codename="review_verificationrequest"))
+        self.client.force_authenticate(self.staff)
+        VerificationRequest.objects.create(
+            applicant=self.owner, verification_type=VerificationType.AGENCY, status=RequestStatus.SUBMITTED
+        )
+        VerificationRequest.objects.create(
+            applicant=self.owner, verification_type=VerificationType.IDENTITY, status=RequestStatus.UNDER_REVIEW
+        )
+        VerificationRequest.objects.create(
+            applicant=self.owner, verification_type=VerificationType.IDENTITY, status=RequestStatus.DRAFT
+        )
+        ListingReport.objects.create(reporter=self.owner, property=self.submitted, reason="OTHER")
+        PropertyImage.objects.create(property=self.submitted, image="test-cover.jpg", is_cover=True)
+        PropertyImage.objects.create(property=self.submitted, image="test-other.jpg")
+        now = timezone.now()
+        for index in range(8):
+            listing = PropertyListing.objects.create(
+                owner=self.owner,
+                title=f"Queue {index}",
+                listing_type=ListingType.RENT,
+                property_type=PropertyType.HOUSE,
+                price=5000,
+                status=ListingStatus.SUBMITTED,
+            )
+            PropertyListing.objects.filter(pk=listing.pk).update(updated_at=now - timedelta(hours=index + 1))
+            event = ModerationAuditEvent.objects.create(
+                actor=self.staff,
+                property=listing,
+                action="PROPERTY_APPROVED",
+                reason="private audit note",
+                metadata={"private": "secret"},
+            )
+            ModerationAuditEvent.objects.filter(pk=event.pk).update(created_at=now - timedelta(minutes=index))
+        response = self.client.get("/api/v1/staff/properties/summary/")
+        self.assertEqual(response.status_code, 200)
+        data = response.data
+        self.assertEqual(data["awaiting_review"], 9)
+        self.assertEqual(data["open_reports"], 1)
+        self.assertEqual(data["agency_reviews"], 1)
+        self.assertEqual(data["verification_requests"], 2)
+        self.assertEqual(len(data["latest_listings"]), 5)
+        self.assertEqual(data["latest_listings"][0]["id"], str(self.submitted.id))
+        self.assertEqual(data["latest_listings"][0]["image_count"], 2)
+        self.assertIn("test-cover.jpg", data["latest_listings"][0]["cover_image"])
+        self.assertEqual(data["latest_listings"][0]["open_reports_count"], 1)
+        self.assertEqual(len(data["recent_activity"]), 7)
+        dates = [row["created_at"] for row in data["recent_activity"]]
+        self.assertEqual(dates, sorted(dates, reverse=True))
+        for row in data["latest_listings"]:
+            for field in ["owner", "description", "images", "latest_note", "reports"]:
+                self.assertNotIn(field, row)
+        for row in data["recent_activity"]:
+            for field in ["actor_email", "reason", "metadata"]:
+                self.assertNotIn(field, row)
+        self.assertNotIn("private audit note", str(data))
+        self.assertNotIn(self.owner.email, str(data))
+
+    def test_unavailable_verification_counts_are_not_fabricated_zeroes(self):
+        self.client.force_authenticate(self.staff)
+        data = self.client.get("/api/v1/staff/properties/summary/").data
+        self.assertIsNone(data["agency_reviews"])
+        self.assertIsNone(data["verification_requests"])
+
+    def test_dashboard_query_count_does_not_grow_per_queue_row(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.force_authenticate(self.staff)
+        # Warm Django's user permission cache before comparing row counts.
+        self.client.get("/api/v1/staff/properties/summary/")
+        with CaptureQueriesContext(connection) as small:
+            self.client.get("/api/v1/staff/properties/summary/")
+        for index in range(6):
+            PropertyListing.objects.create(
+                owner=self.owner,
+                title=f"Extra {index}",
+                listing_type=ListingType.RENT,
+                property_type=PropertyType.HOUSE,
+                price=5000,
+                status=ListingStatus.SUBMITTED,
+            )
+        with CaptureQueriesContext(connection) as large:
+            response = self.client.get("/api/v1/staff/properties/summary/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(small), len(large))
+        self.assertLessEqual(len(large), 8)

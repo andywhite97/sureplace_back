@@ -158,3 +158,66 @@ STAFF_REVIEW_STATUSES = (
     ListingStatus.PUBLISHED,
     ListingStatus.SUSPENDED,
 )
+
+
+class StaffDashboardListingSerializer(serializers.ModelSerializer):
+    """Compact queue rows; no contact details, notes, documents, or full galleries."""
+
+    cover_image = serializers.SerializerMethodField()
+    image_count = serializers.SerializerMethodField()
+    advertiser = serializers.SerializerMethodField()
+    latitude = serializers.FloatField(read_only=True)
+    longitude = serializers.FloatField(read_only=True)
+    open_reports_count = serializers.IntegerField(read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = PropertyListing
+        fields = (
+            "id",
+            "public_id",
+            "title",
+            "listing_type",
+            "price",
+            "currency",
+            "town",
+            "region",
+            "status",
+            "status_label",
+            "verification_status",
+            "latitude",
+            "longitude",
+            "updated_at",
+            "cover_image",
+            "image_count",
+            "advertiser",
+            "open_reports_count",
+        )
+
+    def get_cover_image(self, obj):
+        images = list(obj.images.all())
+        cover = next((image for image in images if image.is_cover), images[0] if images else None)
+        return PropertyImageSerializer(cover, context=self.context).data["image"] if cover else None
+
+    def get_image_count(self, obj):
+        return len(obj.images.all())
+
+    def get_advertiser(self, obj):
+        if obj.agency:
+            return obj.agency.name
+        return f"{obj.owner.first_name} {obj.owner.last_name}".strip() or "Property advertiser"
+
+
+class StaffDashboardActivitySerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+    listing_id = serializers.UUIDField(source="property_id", read_only=True)
+    public_id = serializers.CharField(source="property.public_id", read_only=True)
+
+    class Meta:
+        model = ModerationAuditEvent
+        fields = ("id", "action", "actor_name", "listing_id", "public_id", "created_at")
+
+    def get_actor_name(self, obj):
+        if not obj.actor:
+            return None
+        return f"{obj.actor.first_name} {obj.actor.last_name}".strip() or "Staff member"

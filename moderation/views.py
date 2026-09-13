@@ -13,6 +13,8 @@ from .serializers import (
     StaffModerationActionSerializer,
     StaffPropertyDetailSerializer,
     StaffPropertySerializer,
+    StaffDashboardListingSerializer,
+    StaffDashboardActivitySerializer,
 )
 
 PROPERTY_MODERATION_PERMS = {
@@ -157,18 +159,51 @@ class StaffPropertyModerationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
+        from verification.models import VerificationRequest, RequestStatus, VerificationType
+
         today = timezone.localdate()
-        properties = PropertyListing.objects.all()
+        pending = [ListingStatus.SUBMITTED, ListingStatus.UNDER_REVIEW]
+        counts = PropertyListing.objects.aggregate(
+            awaiting_review=Count("id", filter=Q(status__in=pending)),
+            approved_today=Count("id", filter=Q(status=ListingStatus.PUBLISHED, published_at__date=today)),
+            changes_requested=Count("id", filter=Q(status=ListingStatus.CHANGES_REQUESTED)),
+            rejected=Count("id", filter=Q(status=ListingStatus.REJECTED)),
+            suspended=Count("id", filter=Q(status=ListingStatus.SUSPENDED)),
+        )
+        counts["open_reports"] = ListingReport.objects.filter(property__isnull=False, status="OPEN").count()
+        counts["agency_reviews"] = None
+        counts["verification_requests"] = None
+        if request.user.has_perm("verification.review_verificationrequest"):
+            verification = VerificationRequest.objects.filter(
+                status__in=[RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW]
+            ).aggregate(
+                agency_reviews=Count("id", filter=Q(verification_type=VerificationType.AGENCY)),
+                verification_requests=Count("id"),
+            )
+            counts.update(verification)
+        latest = (
+            PropertyListing.objects.filter(status__in=pending)
+            .select_related("owner", "agency")
+            .prefetch_related("images")
+            .annotate(
+                open_reports_count=Count(
+                    "listingreport", filter=Q(listingreport__status__in=["OPEN", "UNDER_REVIEW"]), distinct=True
+                )
+            )
+            .order_by("-updated_at", "-created_at", "id")[:5]
+        )
+        activity = (
+            ModerationAuditEvent.objects.filter(property__isnull=False)
+            .select_related("actor", "property")
+            .order_by("-created_at", "id")[:7]
+        )
         return Response(
             {
-                "awaiting_review": properties.filter(
-                    status__in=[ListingStatus.SUBMITTED, ListingStatus.UNDER_REVIEW]
-                ).count(),
-                "approved_today": properties.filter(status=ListingStatus.PUBLISHED, published_at__date=today).count(),
-                "changes_requested": properties.filter(status=ListingStatus.CHANGES_REQUESTED).count(),
-                "rejected": properties.filter(status=ListingStatus.REJECTED).count(),
-                "suspended": properties.filter(status=ListingStatus.SUSPENDED).count(),
-                "open_reports": ListingReport.objects.filter(property__isnull=False, status="OPEN").count(),
+                **counts,
+                "latest_listings": StaffDashboardListingSerializer(
+                    latest, many=True, context=self.get_serializer_context()
+                ).data,
+                "recent_activity": StaffDashboardActivitySerializer(activity, many=True).data,
             }
         )
 
