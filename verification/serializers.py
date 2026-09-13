@@ -3,9 +3,12 @@ from .models import *
 
 
 class RequestSerializer(serializers.ModelSerializer):
+    requirements = serializers.SerializerMethodField()
+    documents = serializers.SerializerMethodField()
+
     class Meta:
         model = VerificationRequest
-        fields = "__all__"
+        fields = [field.name for field in VerificationRequest._meta.fields] + ["requirements", "documents"]
         read_only_fields = ("applicant", "status", "submitted_at", "reviewed_at", "reviewed_by")
 
     def validate(self, a):
@@ -21,7 +24,46 @@ class RequestSerializer(serializers.ModelSerializer):
 
             if not authorized(request.user, VerificationRequest(applicant=request.user, **a)):
                 raise serializers.ValidationError("You cannot request verification for this entity.")
+            duplicate = VerificationRequest.objects.filter(
+                applicant=request.user,
+                verification_type=kind,
+                status__in=[
+                    RequestStatus.DRAFT,
+                    RequestStatus.SUBMITTED,
+                    RequestStatus.UNDER_REVIEW,
+                    RequestStatus.CHANGES_REQUESTED,
+                    RequestStatus.APPROVED,
+                ],
+            )
+            for field in ("agency", "agent_profile", "property", "stay"):
+                duplicate = duplicate.filter(**{field: a.get(field)})
+            if self.instance:
+                duplicate = duplicate.exclude(pk=self.instance.pk)
+            if duplicate.exists():
+                raise serializers.ValidationError("An active verification request already exists for this item.")
         return a
+
+    def get_requirements(self, obj):
+        from .requirements import DEFINITIONS
+        uploaded = set(obj.documents.values_list("document_type", flat=True))
+        result = []
+        for requirement in DEFINITIONS.get(obj.verification_type, {}).get("requirements", []):
+            alternatives = set(requirement.get("alternatives", [requirement["key"]]))
+            result.append({
+                **requirement,
+                "uploaded": bool(uploaded.intersection(alternatives)),
+                "document_types": sorted(uploaded.intersection(alternatives)),
+            })
+        return result
+
+    def get_documents(self, obj):
+        # File URLs remain private; authorized clients use the protected download endpoint.
+        return [
+            {"id": str(item.id), "document_type": item.document_type, "status": item.status,
+             "file_name": item.file.name.rsplit("/", 1)[-1], "file_size": item.file.size,
+             "uploaded_at": item.uploaded_at, "rejection_reason": item.rejection_reason}
+            for item in obj.documents.all()
+        ]
 
 
 class DocumentSerializer(serializers.ModelSerializer):

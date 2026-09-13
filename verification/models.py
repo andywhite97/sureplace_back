@@ -20,6 +20,7 @@ class RequestStatus(models.TextChoices):
     UNDER_REVIEW = "UNDER_REVIEW", "Under review"
     APPROVED = "APPROVED", "Approved"
     REJECTED = "REJECTED", "Rejected"
+    CHANGES_REQUESTED = "CHANGES_REQUESTED", "Changes requested"
     CANCELLED = "CANCELLED", "Cancelled"
     EXPIRED = "EXPIRED", "Expired"
 
@@ -34,7 +35,7 @@ class VerificationRequest(TimeStampedModel):
     agent_profile = models.ForeignKey("agencies.AgentProfile", on_delete=models.CASCADE, null=True, blank=True)
     property = models.ForeignKey("properties.PropertyListing", on_delete=models.CASCADE, null=True, blank=True)
     stay = models.ForeignKey("stays.Stay", on_delete=models.CASCADE, null=True, blank=True)
-    status = models.CharField(max_length=16, choices=RequestStatus.choices, default=RequestStatus.DRAFT)
+    status = models.CharField(max_length=20, choices=RequestStatus.choices, default=RequestStatus.DRAFT)
     submitted_at = models.DateTimeField(null=True, blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     reviewed_by = models.ForeignKey(
