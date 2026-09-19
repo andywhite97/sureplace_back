@@ -9,6 +9,7 @@ from rest_framework import serializers
 
 from notifications.email_templates import absolute_url
 from notifications.services import enqueue_transactional_email
+from properties.models import ListingStatus, PropertyListing
 
 from .models import Agency, AgencyInvitation, AgentProfile
 
@@ -88,6 +89,165 @@ class AgentProfileSerializer(serializers.ModelSerializer):
 
     def get_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email
+
+
+class PublicAgencySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Agency
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "logo",
+            "description",
+            "phone",
+            "email",
+            "whatsapp_number",
+            "website",
+            "address",
+            "region",
+            "town",
+            "suburb",
+            "country_code",
+            "verification_status",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class ActiveListingSummarySerializer(serializers.ModelSerializer):
+    cover_image = serializers.SerializerMethodField()
+    is_favourited = serializers.BooleanField(default=False, read_only=True)
+
+    class Meta:
+        model = PropertyListing
+        fields = (
+            "id",
+            "slug",
+            "title",
+            "listing_type",
+            "price",
+            "currency",
+            "town",
+            "suburb",
+            "bedrooms",
+            "bathrooms",
+            "cover_image",
+            "is_favourited",
+        )
+
+    def get_cover_image(self, obj):
+        image = obj.cover_image
+        if not image:
+            return None
+        request = self.context.get("request")
+        url = image.image.url
+        return request.build_absolute_uri(url) if request and not str(url).startswith(("http://", "https://")) else url
+
+
+class PublicAgentListSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(read_only=True)
+    slug = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+    avatar = serializers.ImageField(source="user.avatar", read_only=True)
+    agency = PublicAgencySerializer(read_only=True)
+    verified_agent = serializers.SerializerMethodField()
+    verified_agency = serializers.SerializerMethodField()
+    service_areas = serializers.SerializerMethodField()
+    active_listings_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AgentProfile
+        fields = (
+            "id",
+            "slug",
+            "name",
+            "avatar",
+            "bio",
+            "agency",
+            "verified_agent",
+            "verified_agency",
+            "service_areas",
+            "active_listings_count",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_slug(self, obj):
+        base = slugify(f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email)
+        return base or "agent"
+
+    def get_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email
+
+    def get_verified_agent(self, obj):
+        return obj.verification_status == "VERIFIED"
+
+    def get_verified_agency(self, obj):
+        return obj.agency.verification_status == "VERIFIED"
+
+    def get_service_areas(self, obj):
+        values = []
+        for raw in [obj.agency.region, obj.agency.town, obj.agency.suburb]:
+            if raw:
+                values.append(raw)
+        values.extend(
+            str(item)
+            for item in (
+                obj.property_listings.filter(status=ListingStatus.PUBLISHED)
+                .exclude(town="")
+                .values_list("town", flat=True)
+                .distinct()
+            )
+        )
+        ordered = []
+        seen = set()
+        for value in values:
+            if value and value not in seen:
+                ordered.append(value)
+                seen.add(value)
+        return ordered[:8]
+
+    def get_active_listings_count(self, obj):
+        return obj.property_listings.filter(status=ListingStatus.PUBLISHED).count()
+
+
+class PublicAgentDetailSerializer(PublicAgentListSerializer):
+    email = serializers.EmailField(source="user.email", read_only=True)
+    phone = serializers.SerializerMethodField()
+    whatsapp_number = serializers.CharField(read_only=True)
+    languages = serializers.SerializerMethodField()
+    years_of_experience = serializers.SerializerMethodField()
+    agency_description = serializers.SerializerMethodField()
+    active_listings = serializers.SerializerMethodField()
+
+    class Meta(PublicAgentListSerializer.Meta):
+        fields = PublicAgentListSerializer.Meta.fields + (
+            "email",
+            "phone",
+            "whatsapp_number",
+            "languages",
+            "years_of_experience",
+            "agency_description",
+            "active_listings",
+        )
+
+    def get_phone(self, obj):
+        return obj.user.phone_number or None
+
+    def get_languages(self, obj):
+        return []
+
+    def get_years_of_experience(self, obj):
+        return None
+
+    def get_agency_description(self, obj):
+        return obj.agency.description or None
+
+    def get_active_listings(self, obj):
+        listings = obj.property_listings.filter(status=ListingStatus.PUBLISHED).select_related("agency", "agent").prefetch_related("images")
+        return ActiveListingSummarySerializer(listings, many=True, context=self.context).data
 
 
 class AgencyInvitationSerializer(serializers.ModelSerializer):

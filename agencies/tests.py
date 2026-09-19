@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -5,10 +7,12 @@ from rest_framework.test import APITestCase
 from accounts.models import User
 from core.choices import VerificationStatus
 from notifications.models import EmailDelivery
+from properties.models import PropertyListing
 from .models import Agency, AgencyInvitation, AgentProfile
 
 
 class AgencyModelTests(TestCase):
+
     def setUp(self):
         self.agency = Agency.objects.create(
             name="Lusito Estates", slug="lusito-estates", town="Mbabane", region="Hhohho"
@@ -31,6 +35,7 @@ class AgencyModelTests(TestCase):
 
 
 class AgencyApiTests(APITestCase):
+
     def setUp(self):
         self.user = User.objects.create_user(
             email="owner@example.com",
@@ -128,3 +133,74 @@ class AgencyApiTests(APITestCase):
         self.client.force_authenticate(self.user)
         response = self.client.delete(reverse("v1:agency-remove-member", args=[agency.id, profile.id]))
         self.assertEqual(response.status_code, 409)
+
+
+class PublicAgentApiTests(APITestCase):
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email="owner@example.com",
+            password="StrongPass123!",
+            first_name="Nomsa",
+            last_name="Dlamini",
+            is_email_verified=True,
+        )
+        self.agency = Agency.objects.create(
+            name="Lusito Estates",
+            slug="lusito-estates",
+            region="Hhohho",
+            town="Mbabane",
+            description="Property specialists in Eswatini.",
+            verification_status=VerificationStatus.VERIFIED,
+        )
+        self.agent_user = User.objects.create_user(
+            email="agent@example.com",
+            password="StrongPass123!",
+            first_name="Sibusiso",
+            last_name="Mamba",
+            is_email_verified=True,
+        )
+        self.agent = AgentProfile.objects.create(
+            user=self.agent_user,
+            agency=self.agency,
+            role=AgentProfile.Role.AGENT,
+            bio="Trusted property advisor.",
+            verification_status=VerificationStatus.VERIFIED,
+            is_active=True,
+        )
+        self.listing = PropertyListing.objects.create(
+            owner=self.owner,
+            agency=self.agency,
+            agent=self.agent,
+            title="Modern Family Home",
+            description="A great place to call home.",
+            listing_type="SALE",
+            property_type="HOUSE",
+            price=Decimal("2500000.00"),
+            currency="SZL",
+            region="Hhohho",
+            town="Mbabane",
+            suburb="Sidwashini",
+            address="3 Main Road",
+            status="PUBLISHED",
+            verification_status=VerificationStatus.VERIFIED,
+            featured=True,
+        )
+
+    def test_public_agents_listing_and_detail_are_available(self):
+        response = self.client.get(reverse("v1:agent-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(response.data["count"], 0)
+        first = response.data["results"][0]
+        self.assertEqual(first["name"], "Sibusiso Mamba")
+        self.assertTrue(first["verified_agent"])
+        self.assertTrue(first["verified_agency"])
+        self.assertIn("Mbabane", first["service_areas"])
+        self.assertEqual(first["agency"]["name"], "Lusito Estates")
+
+        detail = self.client.get(reverse("v1:agent-detail", args=[self.agent.pk]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data["id"], str(self.agent.pk))
+        self.assertEqual(detail.data["agency"]["name"], "Lusito Estates")
+        self.assertEqual(detail.data["active_listings_count"], 1)
+        self.assertEqual(detail.data["active_listings"][0]["title"], "Modern Family Home")

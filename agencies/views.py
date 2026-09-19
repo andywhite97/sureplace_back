@@ -1,8 +1,10 @@
 from django.db import models, transaction
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException, ValidationError
+from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -18,12 +20,63 @@ from .serializers import (
     AgencySerializer,
     AgentProfileSerializer,
     InvitationActionSerializer,
+    PublicAgentDetailSerializer,
+    PublicAgentListSerializer,
     RoleUpdateSerializer,
 )
 
 
 class AgencyCreateEmailNotVerified(EmailNotVerified):
     default_detail = "Please verify your email address before creating an agency."
+
+
+class PublicAgentViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [permissions.AllowAny]
+    serializer_class = PublicAgentListSerializer
+    filter_backends = [SearchFilter]
+    search_fields = [
+        "user__first_name",
+        "user__last_name",
+        "bio",
+        "agency__name",
+        "agency__town",
+        "agency__region",
+    ]
+
+    def get_queryset(self):
+        queryset = (
+            AgentProfile.objects.filter(is_active=True, user__is_active=True)
+            .select_related("user", "agency")
+            .prefetch_related("property_listings__images")
+            .annotate(active_listing_count=Count("property_listings", filter=Q(property_listings__status="PUBLISHED")))
+        )
+        params = self.request.query_params
+        verified_only = params.get("verified")
+        if verified_only is not None and str(verified_only).lower() in {"1", "true", "yes"}:
+            queryset = queryset.filter(verification_status="VERIFIED")
+        agency_id = params.get("agency")
+        if agency_id:
+            queryset = queryset.filter(agency_id=agency_id)
+        region = params.get("region")
+        if region:
+            queryset = queryset.filter(Q(agency__region=region) | Q(property_listings__region=region))
+        town = params.get("town")
+        if town:
+            queryset = queryset.filter(Q(agency__town=town) | Q(property_listings__town=town))
+        ordering = params.get("ordering", "relevance")
+        order_map = {
+            "relevance": ["-verification_status", "-active_listing_count", "-created_at"],
+            "name": ["user__first_name", "user__last_name"],
+            "active": ["-active_listing_count", "-created_at"],
+            "newest": ["-created_at", "-active_listing_count"],
+        }
+        queryset = queryset.order_by(*order_map.get(ordering, order_map["relevance"]))
+        return queryset.distinct()
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return PublicAgentDetailSerializer
+        return PublicAgentListSerializer
 
 
 class Conflict(APIException):

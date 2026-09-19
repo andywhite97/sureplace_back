@@ -12,6 +12,7 @@ class ImageSerializer(serializers.ModelSerializer):
 
 
 class RoomImageSerializer(serializers.ModelSerializer):
+
     def validate_image(self, value):
         if value.image.format not in ("JPEG", "PNG", "WEBP"):
             raise serializers.ValidationError("Unsupported image type. Choose JPG, PNG or WebP.")
@@ -110,12 +111,12 @@ class StayListSerializer(serializers.ModelSerializer):
     def get_verification_badges(self, o):
         return (
             ([{"type": "STAY", "label": "Verified Stay"}] if o.verification_status == "VERIFIED" else [])
-            + (
+            +(
                 [{"type": "AGENT", "label": "Verified Agent"}]
                 if o.agent and o.agent.verification_status == "VERIFIED"
                 else []
             )
-            + (
+            +(
                 [{"type": "AGENCY", "label": "Verified Agency"}]
                 if o.agency and o.agency.verification_status == "VERIFIED"
                 else []
