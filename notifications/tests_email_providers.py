@@ -269,7 +269,7 @@ class EmailDeliveryTests(TestCase):
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     )
     def test_enqueue_transactional_email_async_mode_queues_celery_task(self):
-        with patch("notifications.tasks.send_email_delivery_task.delay") as delay:
+        with patch("notifications.tasks.send_email_delivery_task.apply_async") as apply_async:
             delivery = enqueue_transactional_email(
                 "owner@sureplace.co.sz",
                 "Booking requested",
@@ -283,7 +283,8 @@ class EmailDeliveryTests(TestCase):
         self.assertEqual(delivery.status, EmailDelivery.Status.PENDING)
         self.assertEqual(delivery.attempts, 0)
         self.assertEqual(len(mail.outbox), 0)
-        delay.assert_called_once()
+        apply_async.assert_called_once()
+        self.assertFalse(apply_async.call_args.kwargs["retry"])
 
     @override_settings(
         EMAIL_PROVIDER="django",
@@ -291,7 +292,7 @@ class EmailDeliveryTests(TestCase):
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     )
     def test_enqueue_transactional_email_sync_mode_sends_through_provider(self):
-        with patch("notifications.tasks.send_email_delivery_task.delay") as delay:
+        with patch("notifications.tasks.send_email_delivery_task.apply_async") as apply_async:
             delivery = enqueue_transactional_email(
                 "owner@sureplace.co.sz",
                 "Booking requested",
@@ -307,7 +308,7 @@ class EmailDeliveryTests(TestCase):
         self.assertEqual(delivery.attempts, 1)
         self.assertIsNotNone(delivery.accepted_at)
         self.assertEqual(mail.outbox[0].to, ["owner@sureplace.co.sz"])
-        delay.assert_not_called()
+        apply_async.assert_not_called()
 
     @override_settings(EMAIL_PROVIDER="bird", BIRD_API_KEY="bk_us1_test", BIRD_API_BASE_URL="")
     def test_delivery_record_captures_provider_message_id_as_accepted(self):

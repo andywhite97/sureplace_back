@@ -2,7 +2,7 @@ from django.core import mail
 from django.test import override_settings
 from rest_framework.test import APITestCase
 from accounts.models import User
-from .models import EmailDelivery, NotificationPreference, NotificationType
+from .models import EmailDelivery, Notification, NotificationPreference, NotificationType
 from .services import create_notification, notify_transactional, send_transactional_email
 from properties.models import ListingStatus, ListingType, PropertyListing, PropertyType
 
@@ -27,6 +27,45 @@ class NotificationTests(APITestCase):
         p = NotificationPreference.objects.get(user=self.user)
         self.assertTrue(p.email_enabled)
         self.assertFalse(p.marketing_email)
+
+    def test_preference_endpoint_persists_supported_fields(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            "/api/v1/notification-preferences/me/",
+            {"new_message_email": False, "marketing_email": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        preference = NotificationPreference.objects.get(user=self.user)
+        self.assertFalse(preference.new_message_email)
+        self.assertTrue(preference.marketing_email)
+        self.assertFalse(response.data["new_message_email"])
+        self.assertTrue(response.data["marketing_email"])
+
+    @override_settings(
+        EMAIL_PROVIDER="django",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        CELERY_TASK_ALWAYS_EAGER=True,
+    )
+    def test_disabled_category_suppresses_email_but_keeps_notification(self):
+        NotificationPreference.objects.create(user=self.user, booking_updates_email=False)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_transactional(
+                self.user,
+                NotificationType.BOOKING_REQUESTED,
+                "Booking requested",
+                "A guest requested a booking.",
+                {"route": "/account/bookings", "booking_id": "BK-disabled"},
+                "booking:disabled",
+                "booking_updates_email",
+            )
+
+        self.assertTrue(Notification.objects.filter(user=self.user, event_key="booking:disabled").exists())
+        self.assertEqual(EmailDelivery.objects.count(), 0)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_api_isolation_filters_and_read_actions(self):
         n = create_notification(self.user, NotificationType.NEW_MESSAGE, "Message", "Hello")

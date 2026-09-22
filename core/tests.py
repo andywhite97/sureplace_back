@@ -4,6 +4,8 @@ from django.core.files.storage import FileSystemStorage, storages
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from rest_framework.exceptions import ValidationError
+from core.exceptions import api_exception_handler
 
 
 class HealthTests(TestCase):
@@ -46,6 +48,14 @@ class HealthTests(TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["code"], "not_authenticated")
         self.assertIn("request_id", response.json())
+
+    def test_list_validation_error_exposes_safe_message(self):
+        request = type("Request", (), {"request_id": "test-request"})()
+        response = api_exception_handler(
+            ValidationError(["Room cannot satisfy dates, occupancy, or minimum stay."]),
+            {"request": request},
+        )
+        self.assertEqual(response.data["message"], "Room cannot satisfy dates, occupancy, or minimum stay.")
 
 
 class StorageConfigurationTests(SimpleTestCase):

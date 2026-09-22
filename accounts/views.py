@@ -12,6 +12,10 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from agencies.models import AgentProfile
+from properties.models import PropertyListing
+from stays.models import Stay
+
 from .email_verification import (
     EmailVerificationError,
     EmailVerificationExpired,
@@ -74,6 +78,28 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class CapabilitySummaryView(APIView):
+    """Relationship facts for frontend personalization; endpoint permissions remain authoritative."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        memberships = AgentProfile.objects.filter(user=request.user, is_active=True)
+        roles = list(memberships.values_list("role", flat=True))
+        return Response(
+            {
+                "has_individual_property_context": PropertyListing.objects.filter(
+                    owner=request.user, agency__isnull=True
+                ).exists(),
+                "has_individual_stay_context": Stay.objects.filter(owner=request.user, agency__isnull=True).exists(),
+                "has_agent_profile": bool(roles),
+                "has_agency_management_context": bool(roles),
+                "can_manage_agency": any(role in {AgentProfile.Role.OWNER, AgentProfile.Role.ADMIN} for role in roles),
+                "agency_count": len(roles),
+            }
+        )
 
 
 class VerifyEmailView(APIView):

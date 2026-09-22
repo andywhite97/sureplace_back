@@ -8,7 +8,7 @@ from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
@@ -194,13 +194,21 @@ class PropertyViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import NotAuthenticated
 
             raise NotAuthenticated()
-        queryset = self.filter_queryset(
-            self.get_queryset().filter(
+        queryset = self.get_queryset()
+        agency_id = request.query_params.get("agency")
+        if agency_id:
+            if not request.user.agent_profiles.filter(agency_id=agency_id, is_active=True).exists():
+                raise PermissionDenied("You do not have access to this agency workspace.")
+            queryset = queryset.filter(agency_id=agency_id)
+        elif request.query_params.get("context") == "individual":
+            queryset = queryset.filter(owner=request.user, agency__isnull=True)
+        else:
+            queryset = queryset.filter(
                 Q(owner=request.user)
                 | Q(agent__user=request.user, agent__is_active=True)
                 | Q(agency__agents__user=request.user, agency__agents__is_active=True)
             )
-        )
+        queryset = self.filter_queryset(queryset.distinct())
         page = self.paginate_queryset(queryset)
         serializer = PropertyDetailSerializer(page, many=True, context=self.get_serializer_context())
         return self.get_paginated_response(serializer.data)

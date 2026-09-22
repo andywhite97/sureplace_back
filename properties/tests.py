@@ -154,6 +154,9 @@ class PropertyAPITests(APITestCase):
         self.assertEqual(detail_response.data["longitude"], 31.176)
         self.assertNotIn("quality", detail_response.data)
         self.assertNotIn("owner", detail_response.data)
+        self.assertEqual(detail_response.data["advertiser"]["kind"], "OWNER")
+        self.assertEqual(detail_response.data["advertiser"]["name"], "Owner One")
+        self.assertNotIn("email", detail_response.data["advertiser"])
 
     def test_public_list_only_contains_published(self):
         response = self.client.get("/api/properties/")

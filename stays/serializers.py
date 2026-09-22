@@ -111,12 +111,12 @@ class StayListSerializer(serializers.ModelSerializer):
     def get_verification_badges(self, o):
         return (
             ([{"type": "STAY", "label": "Verified Stay"}] if o.verification_status == "VERIFIED" else [])
-            +(
+            + (
                 [{"type": "AGENT", "label": "Verified Agent"}]
                 if o.agent and o.agent.verification_status == "VERIFIED"
                 else []
             )
-            +(
+            + (
                 [{"type": "AGENCY", "label": "Verified Agency"}]
                 if o.agency and o.agency.verification_status == "VERIFIED"
                 else []
@@ -153,6 +153,7 @@ class StayDetailSerializer(serializers.ModelSerializer):
     amenities = AmenitySerializer(many=True, read_only=True)
     room_types = serializers.SerializerMethodField()
     quality = serializers.SerializerMethodField()
+    host = serializers.SerializerMethodField()
 
     class Meta:
         model = Stay
@@ -166,6 +167,56 @@ class StayDetailSerializer(serializers.ModelSerializer):
 
     def get_verification_badges(self, o):
         return StayListSerializer().get_verification_badges(o)
+
+    def get_host(self, o):
+        request = self.context.get("request")
+
+        def image_url(image):
+            if not image:
+                return None
+            url = image.url
+            return request.build_absolute_uri(url) if request else url
+
+        owner_name = f"{o.owner.first_name} {o.owner.last_name}".strip() or "Stay owner"
+        owner_avatar = image_url(o.owner.avatar)
+        if o.agency:
+            agent_name = None
+            agent_avatar = None
+            if o.agent:
+                agent_name = f"{o.agent.user.first_name} {o.agent.user.last_name}".strip() or None
+                agent_avatar = image_url(o.agent.user.avatar)
+            return {
+                "kind": "AGENCY",
+                "name": o.agency.name,
+                "role": "Hospitality agency",
+                "image": image_url(o.agency.logo),
+                "verification_status": o.agency.verification_status,
+                "profile_slug": o.agency.slug,
+                "representative_name": agent_name,
+                "representative_image": agent_avatar,
+            }
+        if o.agent:
+            agent_name = f"{o.agent.user.first_name} {o.agent.user.last_name}".strip() or "Stay agent"
+            return {
+                "kind": "AGENT",
+                "name": agent_name,
+                "role": "Stay agent",
+                "image": image_url(o.agent.user.avatar),
+                "verification_status": o.agent.verification_status,
+                "profile_slug": None,
+                "representative_name": None,
+                "representative_image": None,
+            }
+        return {
+            "kind": "OWNER",
+            "name": owner_name,
+            "role": "Stay owner",
+            "image": owner_avatar,
+            "verification_status": None,
+            "profile_slug": None,
+            "representative_name": None,
+            "representative_image": None,
+        }
 
     def to_representation(self, o):
         data = super().to_representation(o)

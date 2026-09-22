@@ -9,10 +9,12 @@ from rest_framework.test import APITestCase
 from .email_verification import SALT, make_email_verification_token
 from .models import User
 from notifications.models import EmailDelivery
+from agencies.models import Agency, AgentProfile
+from properties.models import PropertyListing
+from stays.models import Stay
 
 
 class AuthenticationTests(APITestCase):
-
     def setUp(self):
         cache.clear()
         self.payload = {
@@ -137,6 +139,45 @@ class AuthenticationTests(APITestCase):
         response = self.client.get(reverse("accounts:me"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["email"], user.email)
+
+    def test_capability_summary_reports_only_the_current_users_relationship_facts(self):
+        user = User.objects.create_user(**self.payload)
+        other = User.objects.create_user(
+            first_name="Other", last_name="User", email="other@example.com", password="StrongPass123!"
+        )
+        agency = Agency.objects.create(name="Lusito Estates", slug="lusito-estates")
+        AgentProfile.objects.create(user=user, agency=agency, role=AgentProfile.Role.ADMIN)
+        PropertyListing.objects.create(
+            owner=user,
+            title="Independent home",
+            listing_type="RENT",
+            property_type="HOUSE",
+            price="5000.00",
+            town="Mbabane",
+        )
+        Stay.objects.create(owner=user, name="Independent stay", stay_type="LODGE", town="Mbabane")
+        PropertyListing.objects.create(
+            owner=other,
+            title="Other home",
+            listing_type="RENT",
+            property_type="HOUSE",
+            price="5000.00",
+            town="Manzini",
+        )
+
+        self.client.force_authenticate(user)
+        response = self.client.get(reverse("accounts:capabilities"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["has_individual_property_context"])
+        self.assertTrue(response.data["has_individual_stay_context"])
+        self.assertTrue(response.data["has_agent_profile"])
+        self.assertTrue(response.data["has_agency_management_context"])
+        self.assertTrue(response.data["can_manage_agency"])
+        self.assertEqual(response.data["agency_count"], 1)
+
+    def test_capability_summary_requires_authentication(self):
+        self.assertEqual(self.client.get(reverse("accounts:capabilities")).status_code, status.HTTP_401_UNAUTHORIZED)
 
     @override_settings(
         EMAIL_PROVIDER="django",

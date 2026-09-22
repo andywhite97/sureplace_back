@@ -42,7 +42,7 @@ class StayViewSet(viewsets.ModelViewSet):
                 )
             )
         else:
-            qs = Stay.objects.select_related("agency", "agent", "agent__user").prefetch_related(
+            qs = Stay.objects.select_related("owner", "agency", "agent", "agent__user").prefetch_related(
                 "images",
                 "amenities",
                 "room_types__images",
@@ -174,13 +174,21 @@ class StayViewSet(viewsets.ModelViewSet):
     def mine(self, request):
         if not request.user.is_authenticated:
             raise NotAuthenticated()
-        qs = self.filter_queryset(
-            self.get_queryset().filter(
+        qs = self.get_queryset()
+        agency_id = request.query_params.get("agency")
+        if agency_id:
+            if not request.user.agent_profiles.filter(agency_id=agency_id, is_active=True).exists():
+                raise PermissionDenied("You do not have access to this agency workspace.")
+            qs = qs.filter(agency_id=agency_id)
+        elif request.query_params.get("context") == "individual":
+            qs = qs.filter(owner=request.user, agency__isnull=True)
+        else:
+            qs = qs.filter(
                 Q(owner=request.user)
                 | Q(agent__user=request.user, agent__is_active=True)
                 | Q(agency__agents__user=request.user, agency__agents__is_active=True)
             )
-        )
+        qs = self.filter_queryset(qs.distinct())
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(StayDetailSerializer(page, many=True, context={"request": request}).data)
 

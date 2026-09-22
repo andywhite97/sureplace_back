@@ -2,7 +2,10 @@ from datetime import date, timedelta
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
+from unittest.mock import patch
+from rest_framework.test import APIClient
 from accounts.models import User
+from notifications.models import NotificationPreference
 from stays.models import Stay, StayStatus, StayType, RoomType, RoomAvailability
 from .models import BookingStatus, ViewingRequest
 from .serializers import BookingSerializer, ViewingSerializer
@@ -101,6 +104,52 @@ class BookingTests(TestCase):
         self.assertEqual(data["stay_slug"], self.stay.slug)
         self.assertEqual(data["stay_town"], "Mbabane")
         self.assertIn("stay_image", data)
+
+    def test_notification_delivery_failure_does_not_fail_booking(self):
+        NotificationPreference.objects.create(user=self.host)
+        with patch(
+            "notifications.services.enqueue_transactional_email",
+            side_effect=RuntimeError("email queue unavailable"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                booking = self.create()
+
+        self.assertEqual(booking.status, BookingStatus.PENDING)
+        self.assertTrue(type(booking).objects.filter(pk=booking.pk).exists())
+
+    def test_booking_endpoint_returns_created_when_notification_queue_is_unavailable(self):
+        self.guest.is_email_verified = True
+        self.guest.save(update_fields=["is_email_verified"])
+        NotificationPreference.objects.create(user=self.host)
+        client = APIClient()
+        client.force_authenticate(self.guest)
+        payload = {
+            "room_type": str(self.room.id),
+            "check_in": self.start.isoformat(),
+            "check_out": (self.start + timedelta(days=2)).isoformat(),
+            "adults": 2,
+            "children": 0,
+            "rooms": 1,
+            "guest_name": "Guest User",
+            "guest_email": self.guest.email,
+            "guest_phone": "",
+            "special_requests": "",
+        }
+
+        with patch(
+            "notifications.services.enqueue_transactional_email",
+            side_effect=RuntimeError("email queue unavailable"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = client.post(
+                    f"/api/v1/stays/{self.stay.id}/bookings/",
+                    payload,
+                    format="json",
+                    HTTP_IDEMPOTENCY_KEY="booking-api-regression",
+                )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], BookingStatus.PENDING)
 
     def test_viewing_serializer_exposes_property_context(self):
         from properties.models import ListingStatus, ListingType, PropertyListing, PropertyType

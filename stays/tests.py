@@ -52,7 +52,11 @@ class StayPhaseTests(APITestCase):
         self.assertNotEqual(self.stay.slug, other.slug)
         self.assertNotEqual(self.stay.public_id, other.public_id)
         self.assertEqual(self.client.get("/api/stays/").status_code, 200)
-        self.assertEqual(self.client.get(f"/api/stays/{self.stay.slug}/").status_code, 200)
+        detail = self.client.get(f"/api/stays/{self.stay.slug}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data["host"]["kind"], "OWNER")
+        self.assertEqual(detail.data["host"]["name"], "Host One")
+        self.assertNotIn("email", detail.data["host"])
 
     def test_authenticated_creation_and_permissions(self):
         self.client.force_authenticate(self.owner)

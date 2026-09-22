@@ -108,15 +108,18 @@ def enqueue_transactional_email(
         return delivery
     from .tasks import send_email_delivery_task
 
-    send_email_delivery_task.delay(
-        str(delivery.id),
-        to,
-        rendered.subject,
-        rendered.text,
-        rendered.html,
-        rendered.template_key,
-        tags or {},
-        metadata or {},
+    send_email_delivery_task.apply_async(
+        args=[
+            str(delivery.id),
+            to,
+            rendered.subject,
+            rendered.text,
+            rendered.html,
+            rendered.template_key,
+            tags or {},
+            metadata or {},
+        ],
+        retry=False,
     )
     return delivery
 
@@ -204,7 +207,10 @@ def notify_transactional(user, kind, title, message, data, event_key, email_flag
                 context=notification_context(kind, title, message, data),
             )
 
-    transaction.on_commit(deliver)
+    # Notification infrastructure must never turn a successful domain write into
+    # a failed API response. Django logs robust callback failures while allowing
+    # the booking, viewing, or message transaction to remain successful.
+    transaction.on_commit(deliver, robust=True)
 
 
 def mask_email(value):

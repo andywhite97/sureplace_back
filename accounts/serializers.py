@@ -11,6 +11,14 @@ User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
+    def validate_avatar(self, value):
+        if value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Profile photos must be 5MB or smaller.")
+        content_type = getattr(value, "content_type", "")
+        if content_type and content_type not in {"image/jpeg", "image/png", "image/webp"}:
+            raise serializers.ValidationError("Use a JPG, PNG or WebP image.")
+        return value
+
     class Meta:
         model = User
         fields = (

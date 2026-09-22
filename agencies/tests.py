@@ -8,11 +8,11 @@ from accounts.models import User
 from core.choices import VerificationStatus
 from notifications.models import EmailDelivery
 from properties.models import PropertyListing
+from stays.models import Stay
 from .models import Agency, AgencyInvitation, AgentProfile
 
 
 class AgencyModelTests(TestCase):
-
     def setUp(self):
         self.agency = Agency.objects.create(
             name="Lusito Estates", slug="lusito-estates", town="Mbabane", region="Hhohho"
@@ -35,7 +35,6 @@ class AgencyModelTests(TestCase):
 
 
 class AgencyApiTests(APITestCase):
-
     def setUp(self):
         self.user = User.objects.create_user(
             email="owner@example.com",
@@ -134,9 +133,97 @@ class AgencyApiTests(APITestCase):
         response = self.client.delete(reverse("v1:agency-remove-member", args=[agency.id, profile.id]))
         self.assertEqual(response.status_code, 409)
 
+    def test_management_dashboard_uses_onboarding_until_a_real_context_exists(self):
+        self.client.force_authenticate(self.user)
+
+        onboarding = self.client.get(reverse("v1:management-dashboard"))
+        self.assertEqual(onboarding.status_code, 200)
+        self.assertEqual(onboarding.data["mode"], "onboarding")
+
+        self.user.onboarding_intents = ["PROPERTY_OWNER"]
+        self.user.save(update_fields=["onboarding_intents"])
+        individual = self.client.get(reverse("v1:management-dashboard"))
+        self.assertEqual(individual.status_code, 200)
+        self.assertEqual(individual.data["mode"], "dashboard")
+        self.assertEqual(individual.data["context"]["kind"], "individual")
+        self.assertEqual(individual.data["stats"]["total_listings"], 0)
+
+    def test_management_dashboard_scopes_listings_and_paginates_each_context(self):
+        agency = Agency.objects.create(name="Lusito Estates", slug="lusito-estates")
+        AgentProfile.objects.create(user=self.user, agency=agency, role=AgentProfile.Role.OWNER)
+        independent = PropertyListing.objects.create(
+            owner=self.user,
+            title="Independent home",
+            listing_type="RENT",
+            property_type="HOUSE",
+            price=Decimal("5000.00"),
+            town="Mbabane",
+        )
+        agency_listing = PropertyListing.objects.create(
+            owner=self.user,
+            agency=agency,
+            title="Agency home",
+            listing_type="SALE",
+            property_type="HOUSE",
+            price=Decimal("900000.00"),
+            town="Manzini",
+        )
+        independent_stay = Stay.objects.create(
+            owner=self.user,
+            name="Independent stay",
+            stay_type="GUEST_HOUSE",
+            town="Mbabane",
+        )
+        agency_stay = Stay.objects.create(
+            owner=self.user,
+            agency=agency,
+            name="Agency stay",
+            stay_type="HOTEL",
+            town="Manzini",
+        )
+        self.client.force_authenticate(self.user)
+
+        individual_response = self.client.get(
+            reverse("v1:management-dashboard"),
+            {"context": "individual", "page_size": 1, "type": "property"},
+        )
+        agency_response = self.client.get(
+            reverse("v1:management-dashboard"),
+            {"context": f"agency:{agency.id}", "page_size": 1, "type": "property"},
+        )
+
+        self.assertEqual(individual_response.status_code, 200)
+        self.assertEqual(individual_response.data["listings"]["count"], 1)
+        self.assertEqual(individual_response.data["listings"]["results"][0]["id"], str(independent.id))
+        self.assertEqual(agency_response.status_code, 200)
+        self.assertEqual(agency_response.data["listings"]["count"], 1)
+        self.assertEqual(agency_response.data["listings"]["results"][0]["id"], str(agency_listing.id))
+
+        individual_properties = self.client.get(reverse("v1:property-mine"), {"context": "individual"})
+        agency_properties = self.client.get(reverse("v1:property-mine"), {"agency": str(agency.id)})
+        individual_stays = self.client.get(reverse("v1:stay-mine"), {"context": "individual"})
+        agency_stays = self.client.get(reverse("v1:stay-mine"), {"agency": str(agency.id)})
+
+        self.assertEqual([item["id"] for item in individual_properties.data["results"]], [str(independent.id)])
+        self.assertEqual([item["id"] for item in agency_properties.data["results"]], [str(agency_listing.id)])
+        self.assertEqual([item["id"] for item in individual_stays.data["results"]], [str(independent_stay.id)])
+        self.assertEqual([item["id"] for item in agency_stays.data["results"]], [str(agency_stay.id)])
+
+    def test_management_dashboard_rejects_an_unauthorized_agency_context(self):
+        agency = Agency.objects.create(name="Another Agency", slug="another-agency")
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(
+            reverse("v1:management-dashboard"),
+            {"context": f"agency:{agency.id}"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.client.get(reverse("v1:property-mine"), {"agency": agency.id}).status_code, 403)
+        self.assertEqual(self.client.get(reverse("v1:stay-mine"), {"agency": agency.id}).status_code, 403)
+
 
 class PublicAgentApiTests(APITestCase):
-
     def setUp(self):
         self.owner = User.objects.create_user(
             email="owner@example.com",

@@ -23,6 +23,8 @@ def api_exception_handler(exc, context):
         field_messages = [str(value[0] if isinstance(value, list) else value) for value in details.values() if value]
         if field_messages:
             message = field_messages[0]
+    elif isinstance(details, list) and details:
+        message = str(details[0])
     response.data = {
         "code": getattr(exc, "default_code", None) or CODE_BY_STATUS.get(response.status_code, "request_error"),
         "message": message,

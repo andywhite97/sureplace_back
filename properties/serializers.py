@@ -122,6 +122,7 @@ class PropertyDetailSerializer(LocationMixin, serializers.ModelSerializer):
     amenities = AmenitySerializer(many=True, read_only=True)
     agency = AgencySummarySerializer(read_only=True)
     agent = AgentSummarySerializer(read_only=True)
+    advertiser = serializers.SerializerMethodField()
     quality = serializers.SerializerMethodField()
 
     class Meta:
@@ -134,6 +135,55 @@ class PropertyDetailSerializer(LocationMixin, serializers.ModelSerializer):
 
     def get_verification_badges(self, obj):
         return PropertyListSerializer(context=self.context).get_verification_badges(obj)
+
+    def get_advertiser(self, obj):
+        request = self.context.get("request")
+
+        def image_url(image):
+            if not image:
+                return None
+            url = image.url
+            return request.build_absolute_uri(url) if request else url
+
+        owner_name = f"{obj.owner.first_name} {obj.owner.last_name}".strip() or "Property owner"
+        if obj.agency:
+            representative_name = None
+            representative_image = None
+            if obj.agent:
+                representative_name = f"{obj.agent.user.first_name} {obj.agent.user.last_name}".strip() or None
+                representative_image = image_url(obj.agent.user.avatar)
+            return {
+                "kind": "AGENCY",
+                "name": obj.agency.name,
+                "role": "Real estate agency",
+                "image": image_url(obj.agency.logo),
+                "verification_status": obj.agency.verification_status,
+                "profile_slug": obj.agency.slug,
+                "representative_name": representative_name,
+                "representative_image": representative_image,
+            }
+        if obj.agent:
+            agent_name = f"{obj.agent.user.first_name} {obj.agent.user.last_name}".strip() or "Property agent"
+            return {
+                "kind": "AGENT",
+                "name": agent_name,
+                "role": "Property agent",
+                "image": image_url(obj.agent.user.avatar),
+                "verification_status": obj.agent.verification_status,
+                "profile_slug": None,
+                "representative_name": None,
+                "representative_image": None,
+            }
+        return {
+            "kind": "OWNER",
+            "name": owner_name,
+            "role": "Property owner",
+            "image": image_url(obj.owner.avatar),
+            "verification_status": None,
+            "profile_slug": None,
+            "representative_name": None,
+            "representative_image": None,
+        }
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
