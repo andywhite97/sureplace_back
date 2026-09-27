@@ -5,12 +5,18 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
-from .models import OnboardingIntent
+from .models import OnboardingIntent, UserModerationEvent
+from .permissions import effective_staff_permissions
 
 User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
+    staff_permissions = serializers.SerializerMethodField()
+
+    def get_staff_permissions(self, obj):
+        return effective_staff_permissions(obj)
+
     def validate_avatar(self, value):
         if value.size > 5 * 1024 * 1024:
             raise serializers.ValidationError("Profile photos must be 5MB or smaller.")
@@ -32,6 +38,8 @@ class UserSerializer(serializers.ModelSerializer):
             "email_verified_at",
             "is_phone_verified",
             "is_staff",
+            "is_superuser",
+            "staff_permissions",
             "onboarding_intents",
             "date_joined",
             "created_at",
@@ -43,6 +51,8 @@ class UserSerializer(serializers.ModelSerializer):
             "email_verified_at",
             "is_phone_verified",
             "is_staff",
+            "is_superuser",
+            "staff_permissions",
             "date_joined",
             "created_at",
             "updated_at",
@@ -68,6 +78,46 @@ class UserSerializer(serializers.ModelSerializer):
 
             enqueue_verification_email_after_commit(instance)
         return instance
+
+
+class StaffUserSerializer(serializers.ModelSerializer):
+    """Minimal account context for the staff-only account safety workspace."""
+
+    display_name = serializers.SerializerMethodField()
+    moderation_events = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "display_name",
+            "email",
+            "is_active",
+            "is_email_verified",
+            "is_phone_verified",
+            "date_joined",
+            "last_login",
+            "moderation_events",
+        )
+        read_only_fields = fields
+
+    def get_display_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip() or obj.email
+
+    def get_moderation_events(self, obj):
+        events = obj.moderation_events.select_related("actor").all()[:20]
+        return [
+            {
+                "id": str(event.id),
+                "action": event.action,
+                "reason": event.reason,
+                "actor_name": (
+                    f"{event.actor.first_name} {event.actor.last_name}".strip() if event.actor else "System"
+                ) or (event.actor.email if event.actor else "System"),
+                "created_at": event.created_at,
+            }
+            for event in events
+        ]
 
 
 class RegistrationSerializer(serializers.ModelSerializer):

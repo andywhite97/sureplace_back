@@ -54,8 +54,11 @@ class Conversation(TimeStampedModel):
         indexes = [models.Index(fields=["-last_message_at"])]
 
     def clean(self):
-        if bool(self.property_id) == bool(self.stay_id):
-            raise ValidationError("Marketplace conversations require exactly one listing target.")
+        has_listing = bool(self.property_id) or bool(self.stay_id)
+        if bool(self.property_id) and bool(self.stay_id):
+            raise ValidationError("A conversation cannot target both a property and a stay.")
+        if not has_listing and not self.assigned_agent_id:
+            raise ValidationError("Conversations require a listing or an assigned agent.")
 
 
 class ConversationParticipant(models.Model):

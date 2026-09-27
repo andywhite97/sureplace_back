@@ -74,6 +74,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
     class Meta:
         ordering = ["-date_joined"]
+        permissions = [("moderate_user", "Can restrict and reinstate user accounts")]
 
     def __str__(self):
         return self.email
@@ -81,3 +82,25 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     def clean(self):
         super().clean()
         self.email = self.__class__.objects.normalize_email(self.email).lower()
+
+
+class UserModerationEvent(models.Model):
+    class Action(models.TextChoices):
+        RESTRICTED = "RESTRICTED", "Restricted"
+        REINSTATED = "REINSTATED", "Reinstated"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="moderation_events")
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="account_moderation_actions",
+    )
+    action = models.CharField(max_length=16, choices=Action.choices)
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "-created_at"])]

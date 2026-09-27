@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.exceptions import APIException, ValidationError as ApiValidationError
 from core.choices import VerificationStatus
 from properties.permissions import can_manage_property
 from stays.services import can_manage as can_manage_stay
@@ -15,6 +17,12 @@ LEGACY_REQUIRED = {
     VerificationType.STAY: [{"BUSINESS_REGISTRATION", "TOURISM_LICENCE"}, {"PROOF_OF_ADDRESS"}],
     VerificationType.BUSINESS: [{"BUSINESS_REGISTRATION"}],
 }
+
+
+class ModerationConflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This verification request was updated by another staff member. Refresh and review the latest status."
+    default_code = "moderation_conflict"
 
 
 def authorized(user, r):
@@ -72,12 +80,42 @@ def submit(r, user):
 def review(r, user, target, notes=""):
     if not user.has_perm("verification.review_verificationrequest") and not user.is_superuser:
         raise ValidationError("Reviewer permission required.")
+    r = VerificationRequest.objects.select_for_update().get(pk=r.pk)
     allowed = {
         RequestStatus.SUBMITTED: {RequestStatus.UNDER_REVIEW, RequestStatus.APPROVED, RequestStatus.REJECTED},
         RequestStatus.UNDER_REVIEW: {RequestStatus.APPROVED, RequestStatus.REJECTED},
     }
     if target not in allowed.get(r.status, set()):
-        raise ValidationError("Invalid verification status transition.")
+        raise ModerationConflict()
+    notes = str(notes).strip()
+    if target == RequestStatus.REJECTED and not notes:
+        raise ValidationError("A rejection reason is required.")
+    if target == RequestStatus.APPROVED:
+        from .requirements import DEFINITIONS
+
+        definitions = DEFINITIONS.get(r.verification_type, {})
+        present = set(r.documents.exclude(status=DocumentStatus.REJECTED).values_list("document_type", flat=True))
+        missing = [
+            requirement.get("label", requirement["key"])
+            for requirement in definitions.get("requirements", [])
+            if requirement.get("required")
+            and not present.intersection(requirement.get("alternatives", [requirement["key"]]))
+        ]
+        dependencies = {
+            item["type"] for item in definitions.get("prerequisites", []) if item.get("required")
+        }
+        approved = set(
+            VerificationRequest.objects.filter(applicant=r.applicant, status=RequestStatus.APPROVED)
+            .exclude(pk=r.pk).values_list("verification_type", flat=True)
+        )
+        missing_dependencies = sorted(dependencies - approved)
+        if missing or missing_dependencies:
+            details = []
+            if missing:
+                details.append(f"Required evidence is missing or rejected: {', '.join(missing)}.")
+            if missing_dependencies:
+                details.append(f"Required prerequisite verification is incomplete: {', '.join(missing_dependencies)}.")
+            raise ApiValidationError(" ".join(details))
     old = r.status
     r.status = target
     r.reviewed_by = user

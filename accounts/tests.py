@@ -1,4 +1,5 @@
 from django.urls import reverse
+from django.contrib.auth.models import Permission
 from django.core import mail
 from django.core.cache import cache
 from django.core import signing
@@ -8,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from .email_verification import SALT, make_email_verification_token
 from .models import User
+from .models import UserModerationEvent
 from notifications.models import EmailDelivery
 from agencies.models import Agency, AgentProfile
 from properties.models import PropertyListing
@@ -74,6 +76,103 @@ class AuthenticationTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
+
+    def test_staff_directory_requires_moderation_permission(self):
+        member = User.objects.create_user(**self.payload)
+        staff = User.objects.create_user(
+            first_name="Staff",
+            last_name="Reviewer",
+            email="staff@example.com",
+            phone_number="+26876123457",
+            password="StrongPass123!",
+            is_staff=True,
+        )
+
+        self.client.force_authenticate(member)
+        self.assertEqual(self.client.get(reverse("accounts:staff-users")).status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(staff)
+        self.assertEqual(self.client.get(reverse("accounts:staff-users")).status_code, status.HTTP_403_FORBIDDEN)
+        staff.user_permissions.add(Permission.objects.get(codename="moderate_user"))
+        staff = User.objects.get(pk=staff.pk)
+        self.client.force_authenticate(staff)
+        response = self.client.get(reverse("accounts:staff-users"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["results"][0]["display_name"], "Staff Reviewer")
+
+    def test_superuser_can_create_and_assign_scoped_staff_roles(self):
+        root = User.objects.create_superuser(
+            email="root@example.com", password="StrongPass123!", first_name="Root", last_name="Admin"
+        )
+        staff = User.objects.create_user(
+            first_name="Staff", last_name="Reviewer", email="staff@example.com",
+            phone_number="+26876123457", password="StrongPass123!", is_staff=True,
+        )
+        self.client.force_authenticate(root)
+
+        created = self.client.post(reverse("accounts:staff-access"), {
+            "name": "Listing Reviewer", "permissions": ["properties.review_propertylisting"]
+        }, format="json")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        role_id = created.data["id"]
+
+        assigned = self.client.put(
+            reverse("accounts:staff-user-roles", args=[staff.id]), {"role_ids": [role_id]}, format="json"
+        )
+        self.assertEqual(assigned.status_code, status.HTTP_200_OK)
+        staff.refresh_from_db()
+        self.assertIn("properties.review_propertylisting", staff.get_all_permissions())
+        self.assertNotIn("accounts.moderate_user", staff.get_all_permissions())
+
+        self.client.force_authenticate(staff)
+        me = self.client.get(reverse("accounts:me"))
+        self.assertEqual(me.status_code, status.HTTP_200_OK)
+        self.assertEqual(me.data["staff_permissions"], ["properties.review_propertylisting"])
+        self.assertEqual(self.client.get(reverse("accounts:staff-access")).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_role_api_rejects_permissions_outside_staff_allowlist(self):
+        root = User.objects.create_superuser(
+            email="root@example.com", password="StrongPass123!", first_name="Root", last_name="Admin"
+        )
+        self.client.force_authenticate(root)
+        response = self.client.post(reverse("accounts:staff-access"), {
+            "name": "Unsafe Role", "permissions": ["auth.change_user"]
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_permitted_staff_can_restrict_and_reinstate_with_audit_history(self):
+        target = User.objects.create_user(**self.payload)
+        moderator = User.objects.create_user(
+            first_name="Staff",
+            last_name="Reviewer",
+            email="moderator@example.com",
+            phone_number="+26876123457",
+            password="StrongPass123!",
+            is_staff=True,
+        )
+        moderator.user_permissions.add(Permission.objects.get(codename="moderate_user"))
+        self.client.force_authenticate(moderator)
+
+        restricted = self.client.post(
+            reverse("accounts:staff-user-moderation", args=[target.id, "restrict"]),
+            {"reason": "Repeated listing-policy violations."},
+            format="json",
+        )
+        self.assertEqual(restricted.status_code, status.HTTP_200_OK)
+        target.refresh_from_db()
+        self.assertFalse(target.is_active)
+        self.assertEqual(UserModerationEvent.objects.get().action, "RESTRICTED")
+
+        restored = self.client.post(
+            reverse("accounts:staff-user-moderation", args=[target.id, "reinstate"]),
+            {"reason": "Appeal reviewed and resolved."},
+            format="json",
+        )
+        self.assertEqual(restored.status_code, status.HTTP_200_OK)
+        target.refresh_from_db()
+        self.assertTrue(target.is_active)
+        self.assertEqual(UserModerationEvent.objects.count(), 2)
 
     def test_change_password_requires_current_password(self):
         user = User.objects.create_user(**self.payload)

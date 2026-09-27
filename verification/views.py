@@ -1,5 +1,7 @@
 from django.http import FileResponse
 from django.db.models import Q
+from django.utils import timezone
+from django.db import transaction
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -7,7 +9,7 @@ from rest_framework.response import Response
 from accounts.permissions import IsEmailVerified
 from .models import *
 from .serializers import *
-from .services import authorized, review, submit, suspend
+from .services import ModerationConflict, authorized, review, submit, suspend
 
 
 class CanReviewVerification(permissions.BasePermission):
@@ -137,15 +139,64 @@ class ReviewViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def reject(self, r, pk=None):
+        notes = str(r.data.get("notes", "")).strip()
+        if not notes:
+            raise ValidationError({"notes": "A rejection reason is required."})
         return Response(
-            self.get_serializer(review(self.get_object(), r.user, RequestStatus.REJECTED, r.data.get("notes", ""))).data
+            self.get_serializer(review(self.get_object(), r.user, RequestStatus.REJECTED, notes)).data
         )
 
-    @action(detail=True, methods=["post"], url_path="request-changes")
-    def request_changes(self, r, pk=None):
-        request = self.get_object()
+    @action(detail=True, methods=["post"], url_path=r"documents/(?P<document_id>[^/.]+)/reject")
+    @transaction.atomic
+    def reject_document(self, r, pk=None, document_id=None):
+        request = VerificationRequest.objects.select_for_update().get(pk=pk)
         if request.status not in (RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW):
-            raise ValidationError("Only submitted requests can receive change requests.")
+            raise ModerationConflict()
+        notes = str(r.data.get("notes", "")).strip()
+        if not notes:
+            raise ValidationError({"notes": "A document rejection reason is required."})
+        try:
+            document = request.documents.select_for_update().get(pk=document_id)
+        except VerificationDocument.DoesNotExist:
+            raise ValidationError({"document": "This document does not belong to the verification request."})
+        if document.status == DocumentStatus.REJECTED:
+            raise ValidationError({"document": "This document has already been rejected."})
+
+        old = request.status
+        document.status = DocumentStatus.REJECTED
+        document.rejection_reason = notes
+        document.reviewed_by = r.user
+        document.reviewed_at = timezone.now()
+        document.save(update_fields=["status", "rejection_reason", "reviewed_by", "reviewed_at", "updated_at"])
+        request.status = RequestStatus.CHANGES_REQUESTED
+        request.reviewer_notes = notes
+        request.requirement_notes = {}
+        request.save(update_fields=["status", "reviewer_notes", "requirement_notes", "updated_at"])
+        from .services import audit
+        audit(request, r.user, "DOCUMENT_REJECTED", old, notes)
+        from notifications.models import NotificationType
+        from notifications.services import notify_transactional
+
+        notify_transactional(
+            request.applicant,
+            NotificationType.VERIFICATION_UPDATE,
+            "Verification document rejected",
+            f"A document needs replacing: {notes}",
+            {"route": f"/account/verification/{request.id}"},
+            f"verification:DOCUMENT_REJECTED:{document.id}",
+            "email_enabled",
+        )
+        # The review queryset prefetches documents. Clear that cache before serializing so the
+        # client receives the document's new status without needing a page reload.
+        request.refresh_from_db()
+        return Response(self.get_serializer(request).data)
+
+    @action(detail=True, methods=["post"], url_path="request-changes")
+    @transaction.atomic
+    def request_changes(self, r, pk=None):
+        request = VerificationRequest.objects.select_for_update().get(pk=pk)
+        if request.status not in (RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW):
+            raise ModerationConflict()
         notes = str(r.data.get("notes", "")).strip()
         keys = r.data.get("requirement_keys", [])
         if not notes or not isinstance(keys, list) or not keys:
@@ -168,7 +219,13 @@ class ReviewViewSet(viewsets.ReadOnlyModelViewSet):
         old = request.status
         request.status = RequestStatus.CHANGES_REQUESTED
         request.reviewer_notes = notes
-        request.save(update_fields=["status", "reviewer_notes", "updated_at"])
+        request.requirement_notes = {
+            requirement["key"]: notes
+            for requirement in definition.get("requirements", [])
+            if requirement["key"] in keys
+            or set(requirement.get("alternatives", [requirement["key"]])).intersection(keys)
+        }
+        request.save(update_fields=["status", "reviewer_notes", "requirement_notes", "updated_at"])
         request.documents.filter(document_type__in=document_types).update(
             status=DocumentStatus.REJECTED, rejection_reason=notes
         )
@@ -186,6 +243,8 @@ class ReviewViewSet(viewsets.ReadOnlyModelViewSet):
             f"verification:CHANGES_REQUESTED:{request.id}",
             "email_enabled",
         )
+        request.refresh_from_db()
+        request._prefetched_objects_cache = {}
         return Response(self.get_serializer(request).data)
 
     @action(detail=True, methods=["post"])

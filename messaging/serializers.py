@@ -33,6 +33,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "id",
             "property",
             "stay",
+            "assigned_agent",
             "subject",
             "status",
             "last_message_at",
@@ -111,6 +112,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             self.context["request"].data.get("message", ""),
             a.get("property"),
             a.get("stay"),
+            a.get("assigned_agent"),
             self.context["request"].data.get("message_type", MessageType.ENQUIRY),
         )
 

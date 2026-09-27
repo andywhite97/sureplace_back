@@ -33,6 +33,10 @@ class HealthTests(TestCase):
         self.assertEqual(reference.status_code, 200)
         self.assertEqual(len(reference.json()["regions"]), 4)
         self.assertIn("property_amenities", reference.json())
+        footer = config.json()["footer"]
+        self.assertEqual([group["key"] for group in footer["navigation_groups"]], ["explore", "owners", "support", "company"])
+        self.assertEqual(footer["newsletter"]["enabled"], False)
+        self.assertEqual(footer["social_links"], [])
         self.assertNotIn("api_secret", str(config.json()).lower())
 
     def test_v1_and_legacy_health_routes(self):

@@ -5,10 +5,23 @@ from .models import *
 class RequestSerializer(serializers.ModelSerializer):
     requirements = serializers.SerializerMethodField()
     documents = serializers.SerializerMethodField()
+    applicant_name = serializers.SerializerMethodField()
+    applicant_email = serializers.EmailField(source="applicant.email", read_only=True)
+    applicant_phone = serializers.CharField(source="applicant.phone_number", read_only=True)
+    entity_name = serializers.SerializerMethodField()
+    audit_events = serializers.SerializerMethodField()
 
     class Meta:
         model = VerificationRequest
-        fields = [field.name for field in VerificationRequest._meta.fields] + ["requirements", "documents"]
+        fields = [field.name for field in VerificationRequest._meta.fields] + [
+            "requirements",
+            "documents",
+            "applicant_name",
+            "applicant_email",
+            "applicant_phone",
+            "entity_name",
+            "audit_events",
+        ]
         read_only_fields = ("applicant", "status", "submitted_at", "reviewed_at", "reviewed_by")
 
     def validate(self, a):
@@ -45,16 +58,48 @@ class RequestSerializer(serializers.ModelSerializer):
 
     def get_requirements(self, obj):
         from .requirements import DEFINITIONS
-        uploaded = set(obj.documents.values_list("document_type", flat=True))
+        documents = list(obj.documents.all())
         result = []
         for requirement in DEFINITIONS.get(obj.verification_type, {}).get("requirements", []):
             alternatives = set(requirement.get("alternatives", [requirement["key"]]))
+            matching = [item for item in documents if item.document_type in alternatives]
+            active = [item for item in matching if item.status != "REJECTED"]
+            note = ""
+            if obj.status == "CHANGES_REQUESTED":
+                note = obj.requirement_notes.get(requirement["key"], "") or (
+                    "" if active else next(
+                        (item.rejection_reason for item in reversed(matching) if item.rejection_reason), ""
+                    )
+                )
             result.append({
                 **requirement,
-                "uploaded": bool(uploaded.intersection(alternatives)),
-                "document_types": sorted(uploaded.intersection(alternatives)),
+                "uploaded": bool(active),
+                "document_types": sorted({item.document_type for item in matching}),
+                "review_status": "ACCEPTED" if any(item.status == "ACCEPTED" for item in active) else "NEEDS_REPLACEMENT" if matching and not active else "PENDING" if active else "MISSING",
+                "reviewer_note": note,
             })
         return result
+
+    def get_audit_events(self, obj):
+        view = self.context.get("view")
+        if getattr(view, "action", None) == "list":
+            return []
+        return [
+            {
+                "id": str(event.id),
+                "event_type": event.event_type,
+                "previous_status": event.previous_status,
+                "new_status": event.new_status,
+                "notes": event.notes,
+                "actor_name": (
+                    f"{event.actor.first_name} {event.actor.last_name}".strip()
+                    or event.actor.email
+                    if event.actor else "System"
+                ),
+                "created_at": event.created_at,
+            }
+            for event in obj.audit_events.select_related("actor").order_by("created_at")
+        ]
 
     def get_documents(self, obj):
         # File URLs remain private; authorized clients use the protected download endpoint.
@@ -64,6 +109,20 @@ class RequestSerializer(serializers.ModelSerializer):
              "uploaded_at": item.uploaded_at, "rejection_reason": item.rejection_reason}
             for item in obj.documents.all()
         ]
+
+    def get_applicant_name(self, obj):
+        return f"{obj.applicant.first_name} {obj.applicant.last_name}".strip() or obj.applicant.email
+
+    def get_entity_name(self, obj):
+        if obj.agency_id:
+            return obj.agency.name
+        if obj.agent_profile_id:
+            return str(obj.agent_profile)
+        if obj.property_id:
+            return obj.property.title
+        if obj.stay_id:
+            return obj.stay.name
+        return "Personal verification"
 
 
 class DocumentSerializer(serializers.ModelSerializer):

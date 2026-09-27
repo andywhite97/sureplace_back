@@ -47,6 +47,7 @@ class VerificationRequest(TimeStampedModel):
     )
     rejection_reason = models.TextField(blank=True)
     reviewer_notes = models.TextField(blank=True)
+    requirement_notes = models.JSONField(default=dict, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

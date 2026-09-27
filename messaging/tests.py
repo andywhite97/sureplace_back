@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from rest_framework.test import APITestCase
 
 from accounts.models import User
+from agencies.models import Agency, AgentProfile
 from bookings.models import ViewingRequest, ViewingStatus
 from properties.models import AvailabilityStatus, ListingStatus, PropertyListing
 from stays.models import Stay, StayStatus, StayType
@@ -43,6 +44,8 @@ class MessagingAndViewingTests(APITestCase):
             location={"latitude": -26.3, "longitude": 31.1},
             status=StayStatus.PUBLISHED,
         )
+        self.agent_agency = Agency.objects.create(name="Message Agency", slug="message-agency")
+        self.agent = AgentProfile.objects.create(user=self.owner, agency=self.agent_agency, is_active=True)
 
     def create_conversation(self, target="property"):
         self.client.force_authenticate(self.seeker)
@@ -61,6 +64,19 @@ class MessagingAndViewingTests(APITestCase):
         self.assertEqual(conversation.participants.count(), 2)
         stay_conversation = self.create_conversation("stay")
         self.assertEqual(stay_conversation.stay, self.stay)
+
+    def test_agent_enquiry_uses_the_existing_conversation_flow(self):
+        self.client.force_authenticate(self.seeker)
+        response = self.client.post(
+            "/api/conversations/",
+            {"assigned_agent": str(self.agent.id), "message": "Can we discuss available homes?"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        conversation = Conversation.objects.get(id=response.data["id"])
+        self.assertIsNone(conversation.property)
+        self.assertEqual(conversation.assigned_agent, self.agent)
+        self.assertEqual(conversation.participants.count(), 2)
 
     def test_participant_and_manager_access_but_stranger_denied(self):
         conversation = self.create_conversation()

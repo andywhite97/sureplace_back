@@ -83,6 +83,11 @@ class VerificationApiTests(APITestCase):
             property=self.property,
             status=RequestStatus.SUBMITTED,
         )
+        VerificationDocument.objects.create(
+            verification_request=request,
+            document_type="TITLE_DEED",
+            file=SimpleUploadedFile("deed.pdf", b"evidence", content_type="application/pdf"),
+        )
         self.client.force_authenticate(self.reviewer)
         response = self.client.post(
             f"/api/moderation/verifications/{request.id}/approve/", {"notes": "Evidence accepted"}, format="json"
@@ -98,6 +103,83 @@ class VerificationApiTests(APITestCase):
         self.assertEqual(self.property.verification_status, VerificationStatus.SUSPENDED)
         self.assertEqual(VerificationAuditEvent.objects.filter(verification_request=request).count(), 2)
 
+    def test_approval_requires_non_rejected_required_evidence(self):
+        request = VerificationRequest.objects.create(
+            applicant=self.owner,
+            verification_type=VerificationType.PROPERTY,
+            property=self.property,
+            status=RequestStatus.SUBMITTED,
+        )
+        self.client.force_authenticate(self.reviewer)
+        response = self.client.post(
+            f"/api/moderation/verifications/{request.id}/approve/", {}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Authority to list", str(response.data))
+
+    def test_staff_detail_includes_requirement_state_and_audit_without_file_urls(self):
+        request = VerificationRequest.objects.create(
+            applicant=self.owner,
+            verification_type=VerificationType.IDENTITY,
+            status=RequestStatus.CHANGES_REQUESTED,
+        )
+        document = VerificationDocument.objects.create(
+            verification_request=request,
+            document_type="NATIONAL_ID",
+            file=SimpleUploadedFile("id.pdf", b"private"),
+            status="REJECTED",
+            rejection_reason="Upload a clearer copy.",
+        )
+        VerificationAuditEvent.objects.create(
+            verification_request=request,
+            actor=self.reviewer,
+            event_type="CHANGES_REQUESTED",
+            previous_status=RequestStatus.UNDER_REVIEW,
+            new_status=RequestStatus.CHANGES_REQUESTED,
+            notes="Upload a clearer copy.",
+        )
+        self.client.force_authenticate(self.reviewer)
+        response = self.client.get(f"/api/moderation/verifications/{request.id}/")
+        self.assertEqual(response.status_code, 200)
+        requirement = response.data["requirements"][0]
+        self.assertFalse(requirement["uploaded"])
+        self.assertEqual(requirement["review_status"], "NEEDS_REPLACEMENT")
+        self.assertEqual(requirement["reviewer_note"], "Upload a clearer copy.")
+        self.assertEqual(response.data["applicant_phone"], "")
+        self.assertEqual(response.data["audit_events"][0]["event_type"], "CHANGES_REQUESTED")
+        self.assertNotIn("file", response.data["documents"][0])
+        self.assertNotIn("url", response.data["documents"][0])
+
+    def test_stale_moderation_action_returns_conflict(self):
+        request = VerificationRequest.objects.create(
+            applicant=self.owner,
+            verification_type=VerificationType.IDENTITY,
+            status=RequestStatus.APPROVED,
+        )
+        self.client.force_authenticate(self.reviewer)
+        response = self.client.post(
+            f"/api/moderation/verifications/{request.id}/request-changes/",
+            {"requirement_keys": ["NATIONAL_ID"], "notes": "Please replace this."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 409)
+
+    def test_requirement_note_persists_when_no_document_was_uploaded(self):
+        request = VerificationRequest.objects.create(
+            applicant=self.owner,
+            verification_type=VerificationType.IDENTITY,
+            status=RequestStatus.UNDER_REVIEW,
+        )
+        self.client.force_authenticate(self.reviewer)
+        response = self.client.post(
+            f"/api/moderation/verifications/{request.id}/request-changes/",
+            {"requirement_keys": ["NATIONAL_ID"], "notes": "Upload a government-issued photo ID."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["requirements"][0]["review_status"], "MISSING")
+        self.assertEqual(response.data["requirements"][0]["reviewer_note"], "Upload a government-issued photo ID.")
+
     def test_private_document_requires_owner_or_reviewer(self):
         request = VerificationRequest.objects.create(applicant=self.owner, verification_type=VerificationType.IDENTITY)
         document = VerificationDocument.objects.create(
@@ -105,6 +187,46 @@ class VerificationApiTests(APITestCase):
         )
         self.client.force_authenticate(self.other)
         self.assertEqual(self.client.get(f"/api/verification/documents/{document.id}/download/").status_code, 403)
+        self.client.force_authenticate(self.reviewer)
+        response = self.client.get(f"/api/verification/documents/{document.id}/download/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"secret")
+
+    def test_rejection_reasons_are_required_and_document_rejection_is_audited(self):
+        request = VerificationRequest.objects.create(
+            applicant=self.owner,
+            verification_type=VerificationType.PROPERTY,
+            property=self.property,
+            status=RequestStatus.SUBMITTED,
+        )
+        document = VerificationDocument.objects.create(
+            verification_request=request,
+            document_type="TITLE_DEED",
+            file=SimpleUploadedFile("deed.pdf", b"evidence", content_type="application/pdf"),
+        )
+        self.client.force_authenticate(self.reviewer)
+        self.assertEqual(
+            self.client.post(f"/api/moderation/verifications/{request.id}/reject/", {}, format="json").status_code,
+            400,
+        )
+        response = self.client.post(
+            f"/api/moderation/verifications/{request.id}/documents/{document.id}/reject/",
+            {"notes": "The owner name is not readable."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], RequestStatus.CHANGES_REQUESTED)
+        returned_document = next(item for item in response.data["documents"] if item["id"] == str(document.id))
+        self.assertEqual(returned_document["status"], "REJECTED")
+        self.assertEqual(returned_document["rejection_reason"], "The owner name is not readable.")
+        document.refresh_from_db()
+        self.assertEqual(document.status, "REJECTED")
+        self.assertEqual(document.rejection_reason, "The owner name is not readable.")
+        self.assertTrue(
+            VerificationAuditEvent.objects.filter(
+                verification_request=request, event_type="DOCUMENT_REJECTED", notes=document.rejection_reason
+            ).exists()
+        )
 
     def test_types_expose_the_configured_upload_limit(self):
         response = self.client.get("/api/verification/types/")
@@ -149,6 +271,7 @@ class VerificationApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], RequestStatus.CHANGES_REQUESTED)
+        self.assertEqual(response.data["requirements"][0]["reviewer_note"], "Please upload a clearer image showing all corners.")
         old_document.refresh_from_db()
         self.assertEqual(old_document.status, "REJECTED")
 

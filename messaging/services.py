@@ -15,29 +15,34 @@ def can_access(user, c):
 
 
 @transaction.atomic
-def create_conversation(user, body, property=None, stay=None, message_type=MessageType.ENQUIRY):
-    if bool(property) == bool(stay):
-        raise ValueError("Exactly one target is required")
-    if property and property.status != ListingStatus.PUBLISHED or stay and stay.status != StayStatus.PUBLISHED:
+def create_conversation(user, body, property=None, stay=None, agent=None, message_type=MessageType.ENQUIRY):
+    if sum(bool(target) for target in (property, stay, agent)) != 1:
+        raise ValueError("Choose exactly one conversation target")
+    if (property and property.status != ListingStatus.PUBLISHED) or (stay and stay.status != StayStatus.PUBLISHED):
         raise ValueError("Listing is not public")
+    if agent and (not agent.is_active or not agent.user.is_active):
+        raise ValueError("Agent is not available")
+    manager = agent.user if agent else ((property or stay).agent.user if (property or stay).agent_id else (property or stay).owner)
+    if manager == user:
+        raise ValueError("You cannot start a conversation with yourself")
     lookup = {
         "created_by": user,
         "property": property,
         "stay": stay,
+        "assigned_agent": agent or ((property or stay).agent if (property or stay).agent_id else None),
         "status__in": [ConversationStatus.OPEN, ConversationStatus.ACTIVE],
     }
     c = Conversation.objects.filter(**lookup).first()
     if not c:
         c = Conversation.objects.create(
-            created_by=user, property=property, stay=stay, assigned_agent=(property or stay).agent
+            created_by=user, property=property, stay=stay, assigned_agent=lookup["assigned_agent"]
         )
         ConversationParticipant.objects.create(conversation=c, user=user, participant_type=ParticipantType.SEEKER)
-        manager = (property or stay).agent.user if (property or stay).agent_id else (property or stay).owner
         ConversationParticipant.objects.get_or_create(
             conversation=c,
             user=manager,
             defaults={
-                "participant_type": ParticipantType.AGENT if (property or stay).agent_id else ParticipantType.OWNER
+                "participant_type": ParticipantType.AGENT if agent or (property or stay).agent_id else ParticipantType.OWNER
             },
         )
     m = Message.objects.create(conversation=c, sender=user, message_type=message_type, body=body)
