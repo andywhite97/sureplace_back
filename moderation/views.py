@@ -323,7 +323,7 @@ class StaffPropertyModerationViewSet(viewsets.ReadOnlyModelViewSet):
 
         labels = {
             "PROPERTY_APPROVED": "approved",
-            "PROPERTY_CHANGES_REQUESTED": "needs changes",
+            "PROPERTY_CHANGES_REQUESTED": "sent back for changes",
             "PROPERTY_REJECTED": "rejected",
             "PROPERTY_SUSPENDED": "suspended",
             "PROPERTY_RESTORED": "restored",

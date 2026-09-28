@@ -2,6 +2,7 @@ import math
 
 from django.db import models, transaction
 from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -26,6 +27,7 @@ from .serializers import (
     InvitationActionSerializer,
     PublicAgentDetailSerializer,
     PublicAgentListSerializer,
+    PublicAgencySerializer,
     RoleUpdateSerializer,
 )
 
@@ -81,6 +83,42 @@ class PublicAgentViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == "retrieve":
             return PublicAgentDetailSerializer
         return PublicAgentListSerializer
+
+
+class PublicAgencyDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, slug):
+        agency = get_object_or_404(Agency, slug=slug, is_active=True)
+        properties = PropertyListing.objects.filter(
+            agency=agency, status=ListingStatus.PUBLISHED
+        ).prefetch_related("images").order_by("-published_at", "-created_at")[:12]
+        stays = Stay.objects.filter(
+            agency=agency, status=StayStatus.PUBLISHED
+        ).prefetch_related("images").order_by("-created_at")[:12]
+
+        def image_url(item):
+            image = item.cover_image
+            if not image:
+                return None
+            url = image.image.url
+            return url if str(url).startswith(("http://", "https://")) else request.build_absolute_uri(url)
+
+        return Response({
+            "agency": PublicAgencySerializer(agency, context={"request": request}).data,
+            "property_count": PropertyListing.objects.filter(agency=agency, status=ListingStatus.PUBLISHED).count(),
+            "stay_count": Stay.objects.filter(agency=agency, status=StayStatus.PUBLISHED).count(),
+            "properties": [
+                {"slug": item.slug, "title": item.title, "town": item.town,
+                 "price": str(item.price), "currency": item.currency, "cover_image": image_url(item)}
+                for item in properties
+            ],
+            "stays": [
+                {"slug": item.slug, "name": item.name, "town": item.town,
+                 "cover_image": image_url(item)}
+                for item in stays
+            ],
+        })
 
 
 class Conflict(APIException):

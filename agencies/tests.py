@@ -57,6 +57,33 @@ class AgencyApiTests(APITestCase):
             "address": "1 Agency Lane",
         }
 
+    def test_public_agency_profile_only_exposes_published_listings(self):
+        agency = Agency.objects.create(name="Lusito Estates", slug="lusito-estates", town="Mbabane")
+        published = PropertyListing.objects.create(
+            owner=self.user, agency=agency, title="Open house", listing_type="SALE",
+            property_type="HOUSE", price=Decimal("900000"), status="PUBLISHED",
+        )
+        PropertyListing.objects.create(
+            owner=self.user, agency=agency, title="Private draft", listing_type="SALE",
+            property_type="HOUSE", price=Decimal("800000"), status="DRAFT",
+        )
+        stay = Stay.objects.create(
+            owner=self.user, agency=agency, name="Open stay", stay_type="HOTEL", status="PUBLISHED",
+        )
+        Stay.objects.create(
+            owner=self.user, agency=agency, name="Private stay", stay_type="HOTEL", status="DRAFT",
+        )
+        response = self.client.get(reverse("v1:public-agency-detail", args=[agency.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["agency"]["name"], agency.name)
+        self.assertEqual(response.data["property_count"], 1)
+        self.assertEqual(response.data["stay_count"], 1)
+        self.assertEqual([item["slug"] for item in response.data["properties"]], [published.slug])
+        self.assertEqual([item["slug"] for item in response.data["stays"]], [stay.slug])
+        agency.is_active = False
+        agency.save(update_fields=["is_active"])
+        self.assertEqual(self.client.get(reverse("v1:public-agency-detail", args=[agency.slug])).status_code, 404)
+
     @override_settings(EMAIL_PROVIDER="django", EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_verified_user_can_create_agency_and_becomes_owner(self):
         self.client.force_authenticate(self.user)
