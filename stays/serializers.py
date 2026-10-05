@@ -76,98 +76,7 @@ class RoomWriteSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class StayListSerializer(serializers.ModelSerializer):
-    verification_badges = serializers.SerializerMethodField()
-    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
-    latitude = serializers.FloatField(read_only=True)
-    longitude = serializers.FloatField(read_only=True)
-    cover_image = serializers.SerializerMethodField()
-    minimum_nightly_price = serializers.SerializerMethodField()
-    available_room_type_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Stay
-        fields = (
-            "id",
-            "public_id",
-            "slug",
-            "name",
-            "stay_type",
-            "region",
-            "town",
-            "suburb",
-            "latitude",
-            "longitude",
-            "verification_status",
-            "verification_badges",
-            "featured",
-            "cover_image",
-            "minimum_nightly_price",
-            "available_room_type_count",
-            "is_favourited",
-            "created_at",
-        )
-
-    def get_verification_badges(self, o):
-        return (
-            ([{"type": "STAY", "label": "Verified Stay"}] if o.verification_status == "VERIFIED" else [])
-            + (
-                [{"type": "AGENT", "label": "Verified Agent"}]
-                if o.agent and o.agent.verification_status == "VERIFIED"
-                else []
-            )
-            + (
-                [{"type": "AGENCY", "label": "Verified Agency"}]
-                if o.agency and o.agency.verification_status == "VERIFIED"
-                else []
-            )
-        )
-
-    def get_cover_image(self, o):
-        prefetched = getattr(o, "_cover_images", None)
-        image = prefetched[0] if prefetched else None
-        if prefetched is None:
-            image = o.cover_image
-        return image.image.url if image else None
-
-    def get_minimum_nightly_price(self, o):
-        value = getattr(o, "_minimum_nightly_price", None)
-        if value is not None:
-            return str(value)
-        room = o.room_types.filter(is_active=True).order_by("base_price").first()
-        return str(room.base_price) if room else None
-
-    def get_available_room_type_count(self, o):
-        value = getattr(o, "_available_room_type_count", None)
-        if value is not None:
-            return value
-        return o.room_types.filter(is_active=True, quantity__gt=0).count()
-
-
-class StayDetailSerializer(serializers.ModelSerializer):
-    verification_badges = serializers.SerializerMethodField()
-    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
-    latitude = serializers.FloatField(read_only=True)
-    longitude = serializers.FloatField(read_only=True)
-    images = ImageSerializer(many=True, read_only=True)
-    amenities = AmenitySerializer(many=True, read_only=True)
-    room_types = serializers.SerializerMethodField()
-    quality = serializers.SerializerMethodField()
-    host = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Stay
-        exclude = ("location", "owner")
-
-    def get_quality(self, o):
-        return quality(o) if can_manage(self.context["request"].user, o) else None
-
-    def get_room_types(self, o):
-        return RoomSerializer(o.room_types.filter(is_active=True), many=True, context=self.context).data
-
-    def get_verification_badges(self, o):
-        return StayListSerializer().get_verification_badges(o)
-
+class HostMixin:
     def get_host(self, o):
         request = self.context.get("request")
 
@@ -217,6 +126,101 @@ class StayDetailSerializer(serializers.ModelSerializer):
             "representative_name": None,
             "representative_image": None,
         }
+
+
+class StayListSerializer(HostMixin, serializers.ModelSerializer):
+    host = serializers.SerializerMethodField()
+    verification_badges = serializers.SerializerMethodField()
+    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
+    latitude = serializers.FloatField(read_only=True)
+    longitude = serializers.FloatField(read_only=True)
+    cover_image = serializers.SerializerMethodField()
+    minimum_nightly_price = serializers.SerializerMethodField()
+    available_room_type_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Stay
+        fields = (
+            "id",
+            "public_id",
+            "slug",
+            "name",
+            "stay_type",
+            "region",
+            "town",
+            "suburb",
+            "latitude",
+            "longitude",
+            "verification_status",
+            "verification_badges",
+            "featured",
+            "cover_image",
+            "host",
+            "minimum_nightly_price",
+            "available_room_type_count",
+            "is_favourited",
+            "created_at",
+        )
+
+    def get_verification_badges(self, o):
+        return (
+            ([{"type": "STAY", "label": "Verified Stay"}] if o.verification_status == "VERIFIED" else [])
+            + (
+                [{"type": "AGENT", "label": "Verified Agent"}]
+                if o.agent and o.agent.verification_status == "VERIFIED"
+                else []
+            )
+            + (
+                [{"type": "AGENCY", "label": "Verified Agency"}]
+                if o.agency and o.agency.verification_status == "VERIFIED"
+                else []
+            )
+        )
+
+    def get_cover_image(self, o):
+        prefetched = getattr(o, "_cover_images", None)
+        image = prefetched[0] if prefetched else None
+        if prefetched is None:
+            image = o.cover_image
+        return image.image.url if image else None
+
+    def get_minimum_nightly_price(self, o):
+        value = getattr(o, "_minimum_nightly_price", None)
+        if value is not None:
+            return str(value)
+        room = o.room_types.filter(is_active=True).order_by("base_price").first()
+        return str(room.base_price) if room else None
+
+    def get_available_room_type_count(self, o):
+        value = getattr(o, "_available_room_type_count", None)
+        if value is not None:
+            return value
+        return o.room_types.filter(is_active=True, quantity__gt=0).count()
+
+
+class StayDetailSerializer(HostMixin, serializers.ModelSerializer):
+    verification_badges = serializers.SerializerMethodField()
+    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
+    latitude = serializers.FloatField(read_only=True)
+    longitude = serializers.FloatField(read_only=True)
+    images = ImageSerializer(many=True, read_only=True)
+    amenities = AmenitySerializer(many=True, read_only=True)
+    room_types = serializers.SerializerMethodField()
+    quality = serializers.SerializerMethodField()
+    host = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Stay
+        exclude = ("location", "owner")
+
+    def get_quality(self, o):
+        return quality(o) if can_manage(self.context["request"].user, o) else None
+
+    def get_room_types(self, o):
+        return RoomSerializer(o.room_types.filter(is_active=True), many=True, context=self.context).data
+
+    def get_verification_badges(self, o):
+        return StayListSerializer().get_verification_badges(o)
 
     def to_representation(self, o):
         data = super().to_representation(o)

@@ -11,7 +11,10 @@ class FavouriteViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = (
             Favourite.objects.filter(user=self.request.user)
-            .select_related("property", "stay")
+            .select_related(
+                "property__owner", "property__agency", "property__agent__user",
+                "stay__owner", "stay__agency", "stay__agent__user",
+            )
             .prefetch_related("property__images", "stay__images", "stay__room_types")
         )
         kind = self.request.query_params.get("type")

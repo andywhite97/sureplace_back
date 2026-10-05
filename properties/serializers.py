@@ -39,6 +39,7 @@ class AgencySummarySerializer(serializers.Serializer):
 
 
 class AgentSummarySerializer(serializers.Serializer):
+    avatar = AbsoluteImageField(source="user.avatar", read_only=True)
     id = serializers.UUIDField()
     name = serializers.SerializerMethodField()
     whatsapp_number = serializers.CharField()
@@ -53,89 +54,7 @@ class LocationMixin:
     longitude = serializers.FloatField(read_only=True)
 
 
-class PropertyListSerializer(LocationMixin, serializers.ModelSerializer):
-    verification_badges = serializers.SerializerMethodField()
-    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
-    cover_image = serializers.SerializerMethodField()
-    agency = AgencySummarySerializer(read_only=True)
-    agent = AgentSummarySerializer(read_only=True)
-
-    class Meta:
-        model = PropertyListing
-        fields = (
-            "id",
-            "public_id",
-            "slug",
-            "title",
-            "listing_type",
-            "property_type",
-            "price",
-            "currency",
-            "town",
-            "suburb",
-            "region",
-            "latitude",
-            "longitude",
-            "bedrooms",
-            "bathrooms",
-            "parking_spaces",
-            "floor_area",
-            "land_area",
-            "featured",
-            "verification_status",
-            "verification_badges",
-            "availability_status",
-            "availability_confirmed_at",
-            "cover_image",
-            "agent",
-            "agency",
-            "is_favourited",
-            "created_at",
-        )
-
-    def get_cover_image(self, obj):
-        prefetched = getattr(obj, "_cover_images", None)
-        image = prefetched[0] if prefetched else None
-        if prefetched is None:
-            image = obj.cover_image
-        if not image:
-            return None
-        request = self.context.get("request")
-        url = image.image.url
-        return request.build_absolute_uri(url) if request else url
-
-    def get_verification_badges(self, obj):
-        badges = []
-        if obj.verification_status == "VERIFIED":
-            badges.append({"type": "PROPERTY", "label": "Verified Property"})
-        if obj.agent and obj.agent.verification_status == "VERIFIED":
-            badges.append({"type": "AGENT", "label": "Verified Agent"})
-        if obj.agency and obj.agency.verification_status == "VERIFIED":
-            badges.append({"type": "AGENCY", "label": "Verified Agency"})
-        return badges
-
-
-class PropertyDetailSerializer(LocationMixin, serializers.ModelSerializer):
-    verification_badges = serializers.SerializerMethodField()
-    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
-    images = PropertyImageSerializer(many=True, read_only=True)
-    amenities = AmenitySerializer(many=True, read_only=True)
-    agency = AgencySummarySerializer(read_only=True)
-    agent = AgentSummarySerializer(read_only=True)
-    advertiser = serializers.SerializerMethodField()
-    quality = serializers.SerializerMethodField()
-
-    class Meta:
-        model = PropertyListing
-        exclude = ("location", "owner")
-
-    def get_quality(self, obj):
-        request = self.context.get("request")
-        return listing_quality(obj) if request and can_manage_property(request.user, obj) else None
-
-    def get_verification_badges(self, obj):
-        return PropertyListSerializer(context=self.context).get_verification_badges(obj)
-
+class AdvertiserMixin:
     def get_advertiser(self, obj):
         request = self.context.get("request")
 
@@ -184,6 +103,92 @@ class PropertyDetailSerializer(LocationMixin, serializers.ModelSerializer):
             "representative_name": None,
             "representative_image": None,
         }
+
+
+class PropertyListSerializer(AdvertiserMixin, LocationMixin, serializers.ModelSerializer):
+    advertiser = serializers.SerializerMethodField()
+    verification_badges = serializers.SerializerMethodField()
+    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
+    cover_image = serializers.SerializerMethodField()
+    agency = AgencySummarySerializer(read_only=True)
+    agent = AgentSummarySerializer(read_only=True)
+
+    class Meta:
+        model = PropertyListing
+        fields = (
+            "id",
+            "public_id",
+            "slug",
+            "title",
+            "listing_type",
+            "property_type",
+            "price",
+            "currency",
+            "town",
+            "suburb",
+            "region",
+            "latitude",
+            "longitude",
+            "bedrooms",
+            "bathrooms",
+            "parking_spaces",
+            "floor_area",
+            "land_area",
+            "featured",
+            "verification_status",
+            "verification_badges",
+            "availability_status",
+            "availability_confirmed_at",
+            "cover_image",
+            "advertiser",
+            "agent",
+            "agency",
+            "is_favourited",
+            "created_at",
+        )
+
+    def get_cover_image(self, obj):
+        prefetched = getattr(obj, "_cover_images", None)
+        image = prefetched[0] if prefetched else None
+        if prefetched is None:
+            image = obj.cover_image
+        if not image:
+            return None
+        request = self.context.get("request")
+        url = image.image.url
+        return request.build_absolute_uri(url) if request else url
+
+    def get_verification_badges(self, obj):
+        badges = []
+        if obj.verification_status == "VERIFIED":
+            badges.append({"type": "PROPERTY", "label": "Verified Property"})
+        if obj.agent and obj.agent.verification_status == "VERIFIED":
+            badges.append({"type": "AGENT", "label": "Verified Agent"})
+        if obj.agency and obj.agency.verification_status == "VERIFIED":
+            badges.append({"type": "AGENCY", "label": "Verified Agency"})
+        return badges
+
+
+class PropertyDetailSerializer(AdvertiserMixin, LocationMixin, serializers.ModelSerializer):
+    verification_badges = serializers.SerializerMethodField()
+    is_favourited = serializers.BooleanField(source="_is_favourited", read_only=True, default=False)
+    images = PropertyImageSerializer(many=True, read_only=True)
+    amenities = AmenitySerializer(many=True, read_only=True)
+    agency = AgencySummarySerializer(read_only=True)
+    agent = AgentSummarySerializer(read_only=True)
+    advertiser = serializers.SerializerMethodField()
+    quality = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropertyListing
+        exclude = ("location", "owner")
+
+    def get_quality(self, obj):
+        request = self.context.get("request")
+        return listing_quality(obj) if request and can_manage_property(request.user, obj) else None
+
+    def get_verification_badges(self, obj):
+        return PropertyListSerializer(context=self.context).get_verification_badges(obj)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

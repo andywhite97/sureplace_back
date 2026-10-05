@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from rest_framework.test import APITestCase
 from django.test import override_settings
 from accounts.models import User
+from agencies.models import Agency, AgentProfile
 from .models import *
 from .services import room_availability
 
@@ -57,6 +58,22 @@ class StayPhaseTests(APITestCase):
         self.assertEqual(detail.data["host"]["kind"], "OWNER")
         self.assertEqual(detail.data["host"]["name"], "Host One")
         self.assertNotIn("email", detail.data["host"])
+
+    def test_list_and_detail_include_agency_logo_and_representative_avatar(self):
+        agency = Agency.objects.create(name="Valley Stays", slug="valley-stays", logo="logos/valley.png")
+        self.owner.avatar = "avatars/host.png"
+        self.owner.save(update_fields=["avatar"])
+        agent = AgentProfile.objects.create(user=self.owner, agency=agency)
+        self.stay.agency = agency
+        self.stay.agent = agent
+        self.stay.save(update_fields=["agency", "agent"])
+        cards = self.client.get("/api/stays/").data["results"]
+        card = next(item for item in cards if item["id"] == str(self.stay.id))
+        detail = self.client.get(f"/api/stays/{self.stay.slug}/").data
+        self.assertEqual(card["host"], detail["host"])
+        self.assertEqual(card["host"]["kind"], "AGENCY")
+        self.assertTrue(card["host"]["image"].endswith("logos/valley.png"))
+        self.assertTrue(card["host"]["representative_image"].endswith("avatars/host.png"))
 
     def test_authenticated_creation_and_permissions(self):
         self.client.force_authenticate(self.owner)

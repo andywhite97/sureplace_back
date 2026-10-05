@@ -5,7 +5,8 @@ from .models import SearchAlertEvent, SearchType
 
 
 def matches(saved):
-    return property_search(saved.criteria) if saved.search_type == SearchType.PROPERTY else stay_search(saved.criteria)
+    queryset = property_search(saved.criteria) if saved.search_type == SearchType.PROPERTY else stay_search(saved.criteria)
+    return queryset.select_related("owner", "agency", "agent__user")
 
 
 def evaluate(saved):

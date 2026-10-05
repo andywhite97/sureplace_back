@@ -82,7 +82,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 queryset=PropertyImage.objects.filter(is_cover=True).order_by("sort_order", "created_at"),
                 to_attr="_cover_images",
             )
-            queryset = PropertyListing.objects.select_related("agency", "agent", "agent__user").prefetch_related(
+            queryset = PropertyListing.objects.select_related("owner", "agency", "agent", "agent__user").prefetch_related(
                 cover_images
             )
         else:

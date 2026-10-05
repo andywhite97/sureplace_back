@@ -27,7 +27,7 @@ class StayViewSet(viewsets.ModelViewSet):
                 to_attr="_cover_images",
             )
             qs = (
-                Stay.objects.select_related("agency", "agent", "agent__user")
+                Stay.objects.select_related("owner", "agency", "agent", "agent__user")
                 .prefetch_related(cover_images)
                 .annotate(
                     _minimum_nightly_price=Min(

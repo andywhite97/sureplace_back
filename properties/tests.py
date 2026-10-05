@@ -164,6 +164,23 @@ class PropertyAPITests(APITestCase):
         self.assertIn(str(self.published.id), ids)
         self.assertNotIn(str(self.draft.id), ids)
 
+    def test_list_and_detail_include_agency_logo_and_representative_avatar(self):
+        agency = Agency.objects.create(name="Valley Estates", slug="valley-estates", logo="logos/valley.png")
+        self.owner.avatar = "avatars/owner.png"
+        self.owner.save(update_fields=["avatar"])
+        agent = AgentProfile.objects.create(user=self.owner, agency=agency)
+        self.published.agency = agency
+        self.published.agent = agent
+        self.published.save(update_fields=["agency", "agent"])
+        cards = self.client.get("/api/properties/").data["results"]
+        card = next(item for item in cards if item["id"] == str(self.published.id))
+        detail = self.client.get(f"/api/properties/{self.published.slug}/").data
+        self.assertEqual(card["advertiser"], detail["advertiser"])
+        self.assertEqual(card["advertiser"]["kind"], "AGENCY")
+        self.assertTrue(card["advertiser"]["image"].endswith("logos/valley.png"))
+        self.assertTrue(card["advertiser"]["representative_image"].endswith("avatars/owner.png"))
+        self.assertEqual(card["agent"]["avatar"], card["advertiser"]["representative_image"])
+
     def test_authenticated_user_can_create_draft(self):
         self.client.force_authenticate(self.owner)
         response = self.client.post("/api/properties/", listing_data(title="New Draft"), format="json")
