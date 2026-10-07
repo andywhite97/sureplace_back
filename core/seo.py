@@ -6,7 +6,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
-from properties.models import ListingStatus, PropertyListing
+from properties.models import AvailabilityStatus, ListingStatus, PropertyListing
 from stays.models import Stay, StayStatus
 
 
@@ -41,7 +41,7 @@ def sitemap_entries():
             }
         )
 
-    for listing in PropertyListing.objects.filter(status=ListingStatus.PUBLISHED).only(
+    for listing in PropertyListing.objects.filter(status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE).only(
         "slug",
         "updated_at",
     ):

@@ -110,6 +110,7 @@ class PropertyListing(TimeStampedModel):
         max_length=16, choices=AvailabilityStatus.choices, default=AvailabilityStatus.UNKNOWN
     )
     availability_confirmed_at = models.DateTimeField(null=True, blank=True)
+    availability_reminded_at = models.DateTimeField(null=True, blank=True)
     featured = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)

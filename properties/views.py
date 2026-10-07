@@ -22,7 +22,7 @@ from .serializers import (
     PropertyListSerializer,
     PropertyWriteSerializer,
 )
-from .services import InvalidListingTransition, confirm_availability, pause_listing, submit_listing
+from .services import InvalidListingTransition, confirm_availability, mark_unavailable, pause_listing, submit_listing
 
 
 def _truthy(value):
@@ -101,7 +101,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.annotate(_is_favourited=Value(False, output_field=BooleanField()))
         if self.action in {"list", "featured"}:
-            queryset = queryset.filter(status=ListingStatus.PUBLISHED)
+            queryset = queryset.filter(status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE)
 
         params = self.request.query_params
         bounds = [params.get(name) for name in ("north", "south", "east", "west")]
@@ -238,6 +238,10 @@ class PropertyViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="confirm-availability")
     def confirm_availability_action(self, request, **kwargs):
         return self._transition(confirm_availability)
+
+    @action(detail=True, methods=["post"], url_path="mark-unavailable")
+    def mark_unavailable_action(self, request, **kwargs):
+        return self._transition(mark_unavailable)
 
     @action(detail=True, methods=["post", "patch", "delete"], parser_classes=[MultiPartParser, FormParser, JSONParser])
     def images(self, request, **kwargs):

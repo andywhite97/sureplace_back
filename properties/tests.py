@@ -39,6 +39,7 @@ def listing_data(**overrides):
         "bedrooms": 3,
         "bathrooms": 2,
         "parking_spaces": 2,
+        "availability_status": AvailabilityStatus.AVAILABLE,
     }
     data.update(overrides)
     return data
@@ -286,6 +287,26 @@ class PropertyAPITests(APITestCase):
         self.assertEqual(self.published.status, ListingStatus.PAUSED)
         self.assertEqual(self.published.availability_status, AvailabilityStatus.AVAILABLE)
         self.assertIsNotNone(self.published.availability_confirmed_at)
+
+    def test_unavailable_listing_is_hidden_and_can_be_confirmed_again(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(f"/api/properties/{self.published.id}/mark-unavailable/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["availability_status"], AvailabilityStatus.UNAVAILABLE)
+        self.client.force_authenticate(None)
+        ids = [item["id"] for item in self.client.get("/api/properties/").data["results"]]
+        self.assertNotIn(str(self.published.id), ids)
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(f"/api/properties/{self.published.id}/confirm-availability/")
+        self.assertEqual(response.status_code, 200)
+        self.client.force_authenticate(None)
+        ids = [item["id"] for item in self.client.get("/api/properties/").data["results"]]
+        self.assertIn(str(self.published.id), ids)
+
+    def test_other_user_cannot_mark_property_unavailable(self):
+        self.client.force_authenticate(self.other)
+        response = self.client.post(f"/api/properties/{self.published.id}/mark-unavailable/")
+        self.assertEqual(response.status_code, 403)
 
     def test_published_listing_submit_is_rejected_with_structured_transition_error(self):
         self.client.force_authenticate(self.owner)

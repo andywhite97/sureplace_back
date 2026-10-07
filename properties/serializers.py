@@ -181,7 +181,7 @@ class PropertyDetailSerializer(AdvertiserMixin, LocationMixin, serializers.Model
 
     class Meta:
         model = PropertyListing
-        exclude = ("location", "owner")
+        exclude = ("location", "owner", "availability_reminded_at")
 
     def get_quality(self, obj):
         request = self.context.get("request")

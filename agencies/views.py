@@ -13,7 +13,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from accounts.permissions import EmailNotVerified, IsEmailVerified
-from properties.models import ListingStatus, PropertyListing
+from properties.models import AvailabilityStatus, ListingStatus, PropertyListing
 from stays.models import Stay, StayStatus
 from bookings.models import Booking, BookingStatus, ViewingRequest, ViewingStatus
 from messaging.models import GuestEnquiry
@@ -91,7 +91,7 @@ class PublicAgencyDetailView(APIView):
     def get(self, request, slug):
         agency = get_object_or_404(Agency, slug=slug, is_active=True)
         properties = PropertyListing.objects.filter(
-            agency=agency, status=ListingStatus.PUBLISHED
+            agency=agency, status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE
         ).prefetch_related("images").order_by("-published_at", "-created_at")[:12]
         stays = Stay.objects.filter(
             agency=agency, status=StayStatus.PUBLISHED
@@ -106,7 +106,7 @@ class PublicAgencyDetailView(APIView):
 
         return Response({
             "agency": PublicAgencySerializer(agency, context={"request": request}).data,
-            "property_count": PropertyListing.objects.filter(agency=agency, status=ListingStatus.PUBLISHED).count(),
+            "property_count": PropertyListing.objects.filter(agency=agency, status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE).count(),
             "stay_count": Stay.objects.filter(agency=agency, status=StayStatus.PUBLISHED).count(),
             "properties": [
                 {"slug": item.slug, "title": item.title, "town": item.town,

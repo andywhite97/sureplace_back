@@ -1,5 +1,7 @@
 from rest_framework.exceptions import APIException
 from django.utils import timezone
+from django.core.cache import cache
+from django.db import transaction
 
 from .models import AvailabilityStatus, ListingStatus
 
@@ -35,7 +37,16 @@ def pause_listing(listing):
 def confirm_availability(listing):
     listing.availability_status = AvailabilityStatus.AVAILABLE
     listing.availability_confirmed_at = timezone.now()
-    listing.save(update_fields=["availability_status", "availability_confirmed_at", "updated_at"])
+    listing.availability_reminded_at = None
+    listing.save(update_fields=["availability_status", "availability_confirmed_at", "availability_reminded_at", "updated_at"])
+    transaction.on_commit(lambda: cache.delete("properties:featured:v2"), robust=True)
+    return listing
+
+
+def mark_unavailable(listing):
+    listing.availability_status = AvailabilityStatus.UNAVAILABLE
+    listing.save(update_fields=["availability_status", "updated_at"])
+    transaction.on_commit(lambda: cache.delete("properties:featured:v2"), robust=True)
     return listing
 
 

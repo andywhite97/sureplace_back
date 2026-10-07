@@ -9,7 +9,7 @@ from rest_framework import serializers
 
 from notifications.email_templates import absolute_url
 from notifications.services import enqueue_transactional_email
-from properties.models import ListingStatus, PropertyListing
+from properties.models import AvailabilityStatus, ListingStatus, PropertyListing
 
 from .models import Agency, AgencyInvitation, AgentProfile
 
@@ -195,7 +195,7 @@ class PublicAgentListSerializer(serializers.ModelSerializer):
         values.extend(
             str(item)
             for item in (
-                obj.property_listings.filter(status=ListingStatus.PUBLISHED)
+                obj.property_listings.filter(status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE)
                 .exclude(town="")
                 .values_list("town", flat=True)
                 .distinct()
@@ -210,7 +210,7 @@ class PublicAgentListSerializer(serializers.ModelSerializer):
         return ordered[:8]
 
     def get_active_listings_count(self, obj):
-        return obj.property_listings.filter(status=ListingStatus.PUBLISHED).count()
+        return obj.property_listings.filter(status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE).count()
 
 
 class PublicAgentDetailSerializer(PublicAgentListSerializer):
@@ -246,7 +246,7 @@ class PublicAgentDetailSerializer(PublicAgentListSerializer):
         return obj.agency.description or None
 
     def get_active_listings(self, obj):
-        listings = obj.property_listings.filter(status=ListingStatus.PUBLISHED).select_related("agency", "agent").prefetch_related("images")
+        listings = obj.property_listings.filter(status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE).select_related("agency", "agent").prefetch_related("images")
         return ActiveListingSummarySerializer(listings, many=True, context=self.context).data
 
 
