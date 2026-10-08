@@ -1,3 +1,4 @@
+from django.utils import timezone
 from decimal import Decimal
 
 from django.test import TestCase, override_settings
@@ -62,7 +63,7 @@ class AgencyApiTests(APITestCase):
         published = PropertyListing.objects.create(
             owner=self.user, agency=agency, title="Open house", listing_type="SALE",
             property_type="HOUSE", price=Decimal("900000"), status="PUBLISHED",
-        )
+        availability_status="AVAILABLE", availability_confirmed_at=timezone.now())
         PropertyListing.objects.create(
             owner=self.user, agency=agency, title="Private draft", listing_type="SALE",
             property_type="HOUSE", price=Decimal("800000"), status="DRAFT",
@@ -299,7 +300,7 @@ class PublicAgentApiTests(APITestCase):
             status="PUBLISHED",
             verification_status=VerificationStatus.VERIFIED,
             featured=True,
-        )
+        availability_status="AVAILABLE", availability_confirmed_at=timezone.now())
 
     def test_public_agents_listing_and_detail_are_available(self):
         response = self.client.get(reverse("v1:agent-list"))

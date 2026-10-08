@@ -55,7 +55,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="mark-read")
     def mark_read(self, request, pk=None):
         c = self.get_object()
-        p = c.participants.get(user=request.user)
+        if not can_access(request.user, c):
+            raise PermissionDenied()
+        listing = c.property or c.stay
+        p, _ = c.participants.get_or_create(
+            user=request.user,
+            defaults={"participant_type": ParticipantType.OWNER if listing and listing.owner_id == request.user.id else ParticipantType.AGENCY_STAFF},
+        )
         p.last_read_at = timezone.now()
         p.save()
         return Response({"unread_count": 0})

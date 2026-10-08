@@ -197,6 +197,10 @@ TEMPLATES: dict[str, EmailTemplateDefinition] = {
 
 NOTIFICATION_TEMPLATE_KEYS = {
     "BOOKING_REQUESTED": "booking.requested_host",
+    "BOOKING_REQUEST_SUBMITTED": "transactional",
+    "BOOKING_EXPIRED": "booking.expired",
+    "BOOKING_REMINDER": "transactional",
+    "BOOKING_INSTANT_CONFIRMED": "booking.confirmed",
     "BOOKING_CONFIRMED": "booking.confirmed",
     "BOOKING_DECLINED": "booking.declined",
     "BOOKING_CANCELLED": "booking.cancelled",

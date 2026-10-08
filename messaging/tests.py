@@ -1,3 +1,4 @@
+from django.utils import timezone
 from datetime import date, timedelta
 
 from rest_framework.test import APITestCase
@@ -14,13 +15,13 @@ class MessagingAndViewingTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(
             email="msgowner@example.com", password="StrongPass123!", first_name="Owner", last_name="One"
-        )
+        , is_email_verified=True)
         self.seeker = User.objects.create_user(
             email="seeker@example.com", password="StrongPass123!", first_name="Seek", last_name="Er"
-        )
+        , is_email_verified=True)
         self.other = User.objects.create_user(
             email="stranger@example.com", password="StrongPass123!", first_name="Strange", last_name="R"
-        )
+        , is_email_verified=True)
         self.property = PropertyListing.objects.create(
             owner=self.owner,
             title="Message Home",
@@ -33,7 +34,7 @@ class MessagingAndViewingTests(APITestCase):
             location={"latitude": -26.3, "longitude": 31.1},
             status=ListingStatus.PUBLISHED,
             availability_status=AvailabilityStatus.AVAILABLE,
-        )
+        availability_confirmed_at=timezone.now())
         self.stay = Stay.objects.create(
             owner=self.owner,
             name="Message Lodge",
@@ -64,6 +65,25 @@ class MessagingAndViewingTests(APITestCase):
         self.assertEqual(conversation.participants.count(), 2)
         stay_conversation = self.create_conversation("stay")
         self.assertEqual(stay_conversation.stay, self.stay)
+
+    def test_authorized_owner_can_mark_read_without_an_existing_participant(self):
+        conversation = self.create_conversation("stay")
+        conversation.participants.filter(user=self.owner).delete()
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(f"/api/conversations/{conversation.id}/mark-read/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 0)
+        self.assertIsNotNone(conversation.participants.get(user=self.owner).last_read_at)
+
+    def test_inactive_participant_cannot_mark_read(self):
+        conversation = self.create_conversation("stay")
+        participant = conversation.participants.get(user=self.seeker)
+        participant.is_active = False
+        participant.save(update_fields=["is_active"])
+        response = self.client.post(f"/api/conversations/{conversation.id}/mark-read/")
+        self.assertEqual(response.status_code, 403)
+        participant.refresh_from_db()
+        self.assertIsNone(participant.last_read_at)
 
     def test_agent_enquiry_uses_the_existing_conversation_flow(self):
         self.client.force_authenticate(self.seeker)

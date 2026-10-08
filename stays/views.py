@@ -2,6 +2,8 @@ import uuid
 from datetime import date, timedelta
 from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import BooleanField, Count, Exists, Min, OuterRef, Prefetch, Q, Value
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, viewsets
@@ -10,8 +12,8 @@ from rest_framework.exceptions import NotAuthenticated, PermissionDenied, Valida
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from accounts.permissions import IsEmailVerified
-from .models import *
-from .serializers import *
+from .models import RoomAvailability, RoomType, Stay, StayImage, StayStatus
+from .serializers import ImageSerializer, RoomImageSerializer, RoomSerializer, RoomWriteSerializer, StayDetailSerializer, StayListSerializer, StayWriteSerializer
 from .services import can_manage, pause, room_availability, submit
 
 
@@ -90,7 +92,7 @@ class StayViewSet(viewsets.ModelViewSet):
 
                 qs = qs.filter(location__within=Polygon.from_bbox((west, south, east, north)))
         dates = [p.get("check_in"), p.get("check_out")]
-        if any(dates):
+        if any(dates) and self.action in ("list", "featured"):
             if not all(dates):
                 raise ValidationError("check_in and check_out are required together.")
             try:
@@ -100,15 +102,11 @@ class StayViewSet(viewsets.ModelViewSet):
                 rooms = int(p.get("rooms", 1))
             except ValueError as e:
                 raise ValidationError("Invalid availability search values.") from e
-            ids = [
-                s.id
-                for s in qs
-                if any(
-                    room_availability(r, ci, co, adults, children, rooms)["available"]
-                    for r in s.room_types.all()
-                    if r.is_active
-                )
-            ]
+            try:
+                ids = [s.id for s in qs if any(room_availability(r, ci, co, adults, children, rooms)["available"]
+                       for r in s.room_types.all() if r.is_active)]
+            except DjangoValidationError as e:
+                raise ValidationError(e.messages) from e
             qs = qs.filter(id__in=ids)
         ordering = {
             "newest": "-created_at",
@@ -253,11 +251,12 @@ class StayViewSet(viewsets.ModelViewSet):
             rooms = int(request.query_params.get("rooms", 1))
         except (KeyError, ValueError) as e:
             raise ValidationError("Valid check_in and check_out are required.") from e
-        results = [
-            room_availability(r, check_in, check_out, adults, children, rooms)
-            for r in stay.room_types.filter(is_active=True)
-        ]
-        return Response({"stay_id": str(stay.id), "room_types": [r for r in results if r["available"]]})
+        try:
+            results = [room_availability(r, check_in, check_out, adults, children, rooms)
+                       for r in stay.room_types.filter(is_active=True)]
+        except DjangoValidationError as e:
+            raise ValidationError(e.messages) from e
+        return Response({"stay_id": str(stay.id), "room_types": results if request.query_params.get("include_unavailable") == "true" else [r for r in results if r["available"]]})
 
 
 class RoomViewSet(viewsets.ModelViewSet):
@@ -267,6 +266,25 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         return RoomWriteSerializer if self.action in ("update", "partial_update") else RoomSerializer
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        from bookings.services import ACTIVE, reserved_units
+        from django.db.models import Max
+        from django.utils import timezone
+
+        room = RoomType.objects.select_for_update().get(pk=serializer.instance.pk)
+        quantity = serializer.validated_data.get("quantity", room.quantity)
+        if quantity < room.quantity:
+            today = timezone.localdate()
+            active = room.bookings.filter(status__in=ACTIVE, check_out__gt=today).exclude(status="PENDING", expires_at__lte=timezone.now())
+            dates = {max(today, day) for day in active.values_list("check_in", flat=True)}
+            peak = max((reserved_units(room, day) for day in dates), default=0)
+            manual = room.availability.filter(date__gte=today).aggregate(total=Max("available_units"))["total"] or 0
+            if quantity < max(peak, manual):
+                raise ValidationError({"quantity": "Quantity cannot be reduced below reserved or calendar inventory."})
+        serializer.instance = room
+        serializer.save()
 
     def get_object(self):
         obj = super().get_object()
@@ -282,8 +300,10 @@ class RoomViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"], url_path="availability/bulk")
+    @transaction.atomic
     def bulk(self, request, pk=None):
         room = self.get_object()
+        room = RoomType.objects.select_for_update().get(pk=room.pk)
         try:
             start = date.fromisoformat(request.data["start_date"])
             end = date.fromisoformat(request.data["end_date"])
@@ -291,6 +311,8 @@ class RoomViewSet(viewsets.ModelViewSet):
             raise ValidationError("Valid start_date and end_date are required.") from e
         if end < start:
             raise ValidationError("end_date must not precede start_date.")
+        if (end-start).days > 366:
+            raise ValidationError("Update at most 367 dates at a time.")
         defaults = {
             k: request.data[k]
             for k in ("available_units", "custom_price", "minimum_stay_override", "is_blocked")
@@ -299,8 +321,16 @@ class RoomViewSet(viewsets.ModelViewSet):
         count = 0
         day = start
         while day <= end:
-            obj, _ = RoomAvailability.objects.update_or_create(room_type=room, date=day, defaults=defaults)
-            obj.full_clean()
+            from bookings.services import reserved_units
+            obj = RoomAvailability.objects.filter(room_type=room, date=day).first() or RoomAvailability(room_type=room, date=day, available_units=room.quantity)
+            for name,value in defaults.items():
+                setattr(obj,name,value)
+            try:
+                obj.full_clean()
+            except DjangoValidationError as e:
+                raise ValidationError(e.message_dict if hasattr(e,"message_dict") else e.messages) from e
+            if obj.available_units < reserved_units(room,day):
+                raise ValidationError("Inventory cannot be reduced below existing reservations and active holds.")
             obj.save()
             count += 1
             day += timedelta(days=1)
@@ -331,6 +361,8 @@ class RoomViewSet(viewsets.ModelViewSet):
         from bookings.services import inventory, reserved_units
 
         room = self.get_object()
+        if not can_manage(request.user, room.stay):
+            raise PermissionDenied("Calendar access requires stay management permission.")
         try:
             start = date.fromisoformat(request.query_params["start"])
             end = date.fromisoformat(request.query_params["end"])

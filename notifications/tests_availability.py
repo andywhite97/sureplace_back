@@ -14,7 +14,7 @@ from .tasks import property_availability_reminders
 @override_settings(PROPERTY_AVAILABILITY_REMINDER_DAYS=14, PROPERTY_AVAILABILITY_STALE_DAYS=21)
 class AvailabilityLifecycleTests(TestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(email="availability@example.com", password="StrongPass123!")
+        self.owner = User.objects.create_user(email="availability@example.com", password="StrongPass123!", first_name="Availability", last_name="Owner", is_email_verified=True)
         self.now = timezone.now()
         self.property = make_listing(
             self.owner, status=ListingStatus.PUBLISHED,

@@ -19,21 +19,26 @@ ALLOWED = {
     "stay_id",
     "viewing_id",
     "booking_id",
+    "manager",
     "saved_search_id",
     "match_count",
 }
 
 
 def create_notification(user, kind, title, message, data=None, event_key=None):
+    return _create_notification(user, kind, title, message, data, event_key)[0]
+
+
+def _create_notification(user, kind, title, message, data=None, event_key=None):
     pref, _ = NotificationPreference.objects.get_or_create(user=user)
     if not pref.in_app_enabled:
-        return None
+        return None, False
     safe = {k: v for k, v in (data or {}).items() if k in ALLOWED}
     return Notification.objects.get_or_create(
         user=user,
         event_key=event_key,
         defaults={"notification_type": kind, "title": title, "message": message, "data": safe},
-    )[0]
+    )
 
 
 def send_transactional_email(
@@ -191,9 +196,9 @@ def notify_transactional(user, kind, title, message, data, event_key, email_flag
     from django.db import transaction
 
     def deliver():
-        notification = create_notification(user, kind, title, message, data, event_key)
+        notification, created = _create_notification(user, kind, title, message, data, event_key)
         pref, _ = NotificationPreference.objects.get_or_create(user=user)
-        if notification and pref.email_enabled and getattr(pref, email_flag, False):
+        if notification and created and pref.email_enabled and getattr(pref, email_flag, False):
             template_key = template_for_notification(kind, title)
             enqueue_transactional_email(
                 user.email,

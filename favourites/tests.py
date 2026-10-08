@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from accounts.models import User
 from properties.models import PropertyListing, ListingStatus
@@ -24,7 +25,7 @@ class FavouriteTests(APITestCase):
             town="Mbabane",
             location={"latitude": -26.3, "longitude": 31.1},
             status=ListingStatus.PUBLISHED,
-        )
+        availability_status="AVAILABLE", availability_confirmed_at=timezone.now())
         self.stay = Stay.objects.create(
             owner=self.user,
             name="Lodge",

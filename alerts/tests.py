@@ -32,7 +32,7 @@ class AlertTests(APITestCase):
             town="Ezulwini",
             location={"latitude": -26.3, "longitude": 31.1},
             status=ListingStatus.PUBLISHED,
-        )
+        availability_status="AVAILABLE", availability_confirmed_at=timezone.now())
         self.stay = Stay.objects.create(
             owner=self.user,
             name="Guest House",

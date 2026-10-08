@@ -24,7 +24,13 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     def get_action(self, obj):
         data = obj.data or {}
-        route = self._semantic_listing_route(obj, data) or self._safe_route(data.get("route"))
+        booking_route = None
+        if data.get("booking_id") and obj.notification_type.startswith("BOOKING_"):
+            base = "/account/manage/bookings" if obj.notification_type == "BOOKING_REQUESTED" or data.get("manager") else "/account/bookings"
+            booking_route = self._safe_route(data.get("route"))
+            if not booking_route or not booking_route.startswith(base):
+                booking_route = base
+        route = booking_route or self._semantic_listing_route(obj, data) or self._safe_route(data.get("route"))
         if not route:
             return None
         return {"label": self._action_label(obj, route), "url": route}

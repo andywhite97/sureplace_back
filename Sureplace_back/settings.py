@@ -196,6 +196,7 @@ MESSAGE_EMAIL_COOLDOWN_MINUTES = env.int("MESSAGE_EMAIL_COOLDOWN_MINUTES", defau
 PROPERTY_AVAILABILITY_REMINDER_DAYS = env.int("PROPERTY_AVAILABILITY_REMINDER_DAYS", default=14)
 PROPERTY_AVAILABILITY_STALE_DAYS = env.int("PROPERTY_AVAILABILITY_STALE_DAYS", default=21)
 CELERY_BEAT_SCHEDULE = {
+    "booking-reminders": {"task": "notifications.tasks.upcoming_booking_reminders", "schedule": 3600},
     "saved-searches": {
         "task": "notifications.tasks.evaluate_saved_searches",
         "schedule": env.int("SAVED_SEARCH_INTERVAL_SECONDS", default=900),

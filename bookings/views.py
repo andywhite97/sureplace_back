@@ -1,7 +1,8 @@
-from datetime import date
 from django.utils import timezone
 from django.db import models
-from rest_framework import permissions, viewsets
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.shortcuts import get_object_or_404
+from rest_framework import permissions, serializers, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
@@ -10,8 +11,8 @@ from properties.models import PropertyListing, ListingStatus
 from properties.permissions import can_manage_property
 from messaging.services import create_conversation, system_message
 from .models import *
-from .serializers import BookingSerializer, ViewingSerializer
-from .services import create_booking, transition
+from .serializers import BookingCreateSerializer, BookingSerializer, ViewingSerializer
+from .services import PriceChanged, create_booking, transition
 
 
 class ViewingViewSet(viewsets.ReadOnlyModelViewSet):
@@ -129,13 +130,15 @@ class BookingViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         u = self.request.user
+        manager = (
+            models.Q(stay__owner=u)
+            | models.Q(stay__agent__user=u, stay__agent__is_active=True)
+            | models.Q(stay__agency__agents__user=u, stay__agency__agents__is_active=True)
+        )
+        if u.is_staff:
+            manager = models.Q()
         qs = (
-            Booking.objects.filter(
-                models.Q(guest=u)
-                | models.Q(stay__owner=u)
-                | models.Q(stay__agent__user=u)
-                | models.Q(stay__agency__agents__user=u)
-            )
+            Booking.objects.filter(manager if u.is_staff else models.Q(guest=u) | manager)
             .select_related("stay", "room_type", "guest")
             .distinct()
         )
@@ -144,18 +147,20 @@ class BookingViewSet(viewsets.ReadOnlyModelViewSet):
             if p.get(f):
                 qs = qs.filter(**{f: p[f]})
         if p.get("scope") == "manager":
-            qs = qs.filter(
-                models.Q(stay__owner=u)
-                | models.Q(stay__agent__user=u)
-                | models.Q(stay__agency__agents__user=u)
-            )
-        return qs.order_by("-created_at")
+            qs = qs.filter(manager)
+        if p.get("scope") == "guest":
+            qs = qs.filter(guest=u)
+        if p.get("idempotency_key"):
+            qs = qs.filter(guest=u, idempotency_key=p["idempotency_key"])
+        return qs.order_by("-created_at", "-id")
 
     def _go(self, target):
         try:
-            obj = transition(self.get_object(), target, self.request.user)
-        except Exception as e:
-            raise ValidationError(getattr(e, "messages", str(e)))
+            obj = transition(self.get_object(), target, self.request.user,
+                             reason=serializers.CharField(max_length=1000, allow_blank=True).run_validation(self.request.data.get("reason", "")),
+                             note=serializers.CharField(max_length=1000, allow_blank=True).run_validation(self.request.data.get("note", "")))
+        except DjangoValidationError as e:
+            raise ValidationError(e.message_dict if hasattr(e, "message_dict") else e.messages) from e
         return Response(self.get_serializer(obj).data)
 
     @action(detail=True, methods=["post"])
@@ -180,24 +185,26 @@ class BookingViewSet(viewsets.ReadOnlyModelViewSet):
 def create_stay_booking(request, stay_id):
     from stays.models import Stay, RoomType
 
-    stay = Stay.objects.get(pk=stay_id)
-    room = RoomType.objects.get(pk=request.data.get("room_type"))
+    s = BookingCreateSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    data = dict(s.validated_data)
+    if data["guest_email"].casefold() != request.user.email.casefold():
+        raise ValidationError({"guest_email": "Use your account email for this booking."})
+    stay = get_object_or_404(Stay, pk=stay_id)
+    room = get_object_or_404(RoomType, pk=data.pop("room_type"), stay=stay)
+    key = request.headers.get("Idempotency-Key")
+    if key is not None:
+        key = serializers.CharField(max_length=100).run_validation(key)
     try:
         obj = create_booking(
             guest=request.user,
             stay=stay,
             room_type=room,
-            check_in=date.fromisoformat(request.data["check_in"]),
-            check_out=date.fromisoformat(request.data["check_out"]),
-            adults=int(request.data.get("adults", 1)),
-            children=int(request.data.get("children", 0)),
-            rooms=int(request.data.get("rooms", 1)),
-            guest_name=request.data["guest_name"],
-            guest_email=request.data["guest_email"],
-            guest_phone=request.data.get("guest_phone", ""),
-            special_requests=request.data.get("special_requests", ""),
-            idempotency_key=request.headers.get("Idempotency-Key"),
+            **data,
+            idempotency_key=key,
         )
-    except Exception as e:
-        raise ValidationError(getattr(e, "messages", str(e)))
+    except PriceChanged as e:
+        return Response({"code": "price_changed", "message": str(e.messages[0]), "new_total": e.total, "nightly_prices": e.nightly_prices}, status=409)
+    except DjangoValidationError as e:
+        raise ValidationError(e.message_dict if hasattr(e, "message_dict") else e.messages) from e
     return Response(BookingSerializer(obj).data, status=201)

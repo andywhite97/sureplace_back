@@ -22,6 +22,24 @@ def expire_bookings_task():
 
 
 @shared_task
+def upcoming_booking_reminders():
+    from bookings.models import Booking, BookingStatus
+
+    tomorrow = timezone.localdate() + timedelta(days=1)
+    count = 0
+    for b in Booking.objects.filter(status=BookingStatus.CONFIRMED, check_in=tomorrow).select_related("stay", "guest", "stay__owner", "stay__agent__user"):
+        operator = b.stay.agent.user if b.stay.agent_id and b.stay.agent.is_active else b.stay.owner
+        for user, manager in ((b.guest, False), (operator, True)):
+            notify_transactional(user, NotificationType.BOOKING_REMINDER,
+                "Arrival tomorrow" if manager else "Your stay is tomorrow",
+                f"Booking {b.reference} arrives on {b.check_in}.",
+                {"route": f"/account/{'manage/' if manager else ''}bookings/{b.id}", "booking_id": str(b.id), "manager": manager},
+                f"booking-reminder:{b.id}:{user.id}:{tomorrow}", "booking_updates_email")
+        count += 1
+    return count
+
+
+@shared_task
 def evaluate_saved_searches():
     now = timezone.now()
     count = 0

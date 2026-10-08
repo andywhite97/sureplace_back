@@ -22,10 +22,14 @@ def can_manage(user, stay):
 
 
 def room_availability(room, check_in, check_out, adults, children, rooms_required):
+    if check_in < timezone.localdate() or (check_out - check_in).days > 366:
+        raise ValidationError("Choose future dates within a 366-night stay.")
     if check_out <= check_in:
         raise ValidationError("Check-out must be after check-in.")
-    if adults > room.capacity_adults * rooms_required or children > room.capacity_children * rooms_required:
-        return {"available": False, "reason": "occupancy"}
+    if adults < 1 or children < 0 or rooms_required < 1:
+        raise ValidationError("At least one adult and one room are required.")
+    occupancy = (adults <= room.capacity_adults * rooms_required and children <= room.capacity_children * rooms_required
+                 and adults + children <= room.total_capacity * rooms_required)
     nights = (check_out - check_in).days
     cached = getattr(room, "_prefetched_objects_cache", {}).get("availability")
     source = cached if cached is not None else room.availability.filter(date__gte=check_in, date__lt=check_out)
@@ -51,7 +55,7 @@ def room_availability(room, check_in, check_out, adults, children, rooms_require
             pass
         inventory = min(inventory, units)
         prices.append({"date": day.isoformat(), "price": str(price)})
-    available = nights >= minimum and inventory >= rooms_required
+    available = occupancy and nights >= minimum and inventory >= rooms_required
     total = sum((Decimal(x["price"]) for x in prices), Decimal("0")) * rooms_required
     return {
         "available": available,
@@ -59,6 +63,8 @@ def room_availability(room, check_in, check_out, adults, children, rooms_require
         "rooms_available": inventory,
         "nightly_prices": prices,
         "total": str(total.quantize(Decimal("0.01"))),
+        "minimum_stay": minimum,
+        "reason": None if available else ("occupancy" if not occupancy else "minimum_stay" if nights < minimum else "inventory"),
     }
 
 

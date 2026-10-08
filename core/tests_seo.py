@@ -1,3 +1,4 @@
+from django.utils import timezone
 from django.test import TestCase, override_settings
 
 from accounts.models import User
@@ -27,7 +28,7 @@ class SitemapTests(TestCase):
             town="Ezulwini",
             location={"latitude": -26.4, "longitude": 31.2},
             status=ListingStatus.PUBLISHED,
-        )
+        availability_status="AVAILABLE", availability_confirmed_at=timezone.now())
         draft = PropertyListing.objects.create(
             owner=self.owner,
             title="Draft Ezulwini House",

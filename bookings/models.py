@@ -90,6 +90,12 @@ class Booking(TimeStampedModel):
     guest_email = models.EmailField()
     guest_phone = models.CharField(max_length=20, blank=True)
     special_requests = models.TextField(blank=True)
+    booking_mode = models.CharField(max_length=20, default="REQUEST_TO_BOOK")
+    payment_method = models.CharField(max_length=24, default="PAY_AT_PROPERTY")
+    policy_snapshot = models.JSONField(default=dict, blank=True)
+    decline_reason = models.CharField(max_length=40, blank=True)
+    action_note = models.TextField(blank=True, max_length=1000)
+    cancellation_reason = models.CharField(max_length=1000, blank=True)
     idempotency_key = models.CharField(max_length=100, null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
@@ -117,3 +123,12 @@ class Booking(TimeStampedModel):
 
             self.reference = f"SP-BKG-{date.today().year}-{uuid.uuid4().hex[:10].upper()}"
         super().save(*args, **kwargs)
+
+
+class BookingEvent(models.Model):
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="events")
+    status = models.CharField(max_length=12, choices=BookingStatus.choices)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    reason = models.CharField(max_length=1000, blank=True)
+    note = models.TextField(blank=True, max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)

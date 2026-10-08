@@ -343,8 +343,10 @@ guest's prior submission.
 `PENDING` and `CONFIRMED` consume inventory; declined, cancelled, completed, and
 expired records do not. Creation runs atomically, locks the room and explicit
 calendar rows, and subtracts active bookings for every night before inserting.
-Pending holds expire after `BOOKING_HOLD_MINUTES` (default 30); run `python manage.py
-expire_pending_bookings` manually until scheduling is introduced.
+Pending holds expire after `BOOKING_HOLD_MINUTES` (default 30). Elapsed holds
+immediately stop consuming inventory and cannot be confirmed. Celery Beat marks
+them `EXPIRED` every five minutes; `python manage.py expire_pending_bookings` can
+also run this cleanup manually.
 
 ```text
 GET /api/bookings/
@@ -356,12 +358,24 @@ POST /api/bookings/{uuid}/complete/
 GET /api/rooms/{uuid}/calendar/?start=2026-12-20&end=2026-12-31
 ```
 
-Managers confirm, decline, and complete; guests may cancel. Valid transitions are
-centralized. A booking creates or reuses its Stay conversation and server-generated
+Active managers confirm, decline, and complete; guests may cancel. Completion is
+allowed only on or after the check-out date. Creation requires a non-past check-in,
+at least one adult and room, and valid guest contact details. Valid transitions are
+centralized, and confirmations share the room lock used by new reservations.
+A booking creates or reuses its Stay conversation and server-generated
 workflow messages. Capacity is multiplied by rooms booked, and price is nightly
 effective price times room count. Taxes and fees remain zero behind explicit fields
 for later policy. SQLite verifies the transaction logic but cannot reproduce
 PostgreSQL row-lock concurrency; production `select_for_update` provides that guard.
+
+Stays default to `REQUEST_TO_BOOK`; managers can enable `INSTANT_BOOK` in Stay
+booking settings. Instant reservations enter `CONFIRMED` directly. Booking
+creation snapshots the Stay's cancellation/house rules and pay-at-property method.
+The API requires policy acceptance and the guest's account email, and supports
+an optimistic quote check with HTTP 409 on price changes. Declines and operator
+cancellations require reasons, with durable booking events. See `docs/api.md`
+for the request contract and `docs/booking-implementation-report.md` for QA results.
+Apply migrations before serving the updated frontend: `python manage.py migrate`.
 
 ## Notifications and background jobs
 
@@ -386,6 +400,8 @@ final delivery.
 Celery uses Redis in deployed environments while tests set eager mode. Scheduled
 work evaluates saved searches (INSTANT means every 15 minutes by default), expires
 booking holds, and reminds owners about stale property availability.
+An hourly job also sends deduplicated upcoming-arrival reminders to the guest and
+operator for confirmed bookings arriving the next day (Eswatini time).
 
 ```powershell
 celery -A Sureplace_back worker -l info

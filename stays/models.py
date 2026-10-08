@@ -35,6 +35,11 @@ class StayStatus(models.TextChoices):
     SUSPENDED = "SUSPENDED", "Suspended"
 
 
+class BookingMode(models.TextChoices):
+    REQUEST_TO_BOOK = "REQUEST_TO_BOOK", "Request to Book"
+    INSTANT_BOOK = "INSTANT_BOOK", "Instant Book"
+
+
 class StayAmenity(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
@@ -77,6 +82,9 @@ class Stay(TimeStampedModel):
     website = models.URLField(blank=True)
     check_in_time = models.TimeField(null=True, blank=True)
     check_out_time = models.TimeField(null=True, blank=True)
+    booking_mode = models.CharField(max_length=20, choices=BookingMode.choices, default=BookingMode.REQUEST_TO_BOOK)
+    cancellation_policy = models.TextField(blank=True, max_length=2000)
+    house_rules = models.TextField(blank=True, max_length=2000)
     amenities = models.ManyToManyField(StayAmenity, blank=True, related_name="stays")
     verification_status = models.CharField(
         max_length=16, choices=VerificationStatus.choices, default=VerificationStatus.UNVERIFIED
