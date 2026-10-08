@@ -3,11 +3,11 @@ from xml.sax.saxutils import escape
 
 from django.conf import settings
 from django.http import HttpResponse
-from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from properties.models import AvailabilityStatus, ListingStatus, PropertyListing
 from stays.models import Stay, StayStatus
+from agencies.models import Agency, AgentProfile
 
 
 def frontend_url(path):
@@ -16,32 +16,50 @@ def frontend_url(path):
 
 
 def sitemap_entries():
-    now = timezone.now()
     entries = [
         {
             "loc": frontend_url("/"),
-            "lastmod": now,
             "priority": "1.0",
             "changefreq": "daily",
         },
         {
             "loc": frontend_url("/properties"),
-            "lastmod": now,
             "priority": "0.9",
             "changefreq": "daily",
         },
     ]
+    for path in ("/agents", "/help", "/about", "/pricing", "/terms", "/privacy", "/cookies", "/verification"):
+        entries.append({"loc": frontend_url(path), "priority": "0.6", "changefreq": "monthly"})
+    for agent in AgentProfile.objects.filter(is_active=True, user__is_active=True).only("id", "updated_at"):
+        entries.append(
+            {
+                "loc": frontend_url(f"/agents/{agent.id}"),
+                "lastmod": agent.updated_at,
+                "priority": "0.6",
+                "changefreq": "weekly",
+            }
+        )
+    for agency in Agency.objects.filter(is_active=True).only("slug", "updated_at"):
+        entries.append(
+            {
+                "loc": frontend_url(f"/agencies/{agency.slug}"),
+                "lastmod": agency.updated_at,
+                "priority": "0.6",
+                "changefreq": "weekly",
+            }
+        )
     if settings.FEATURE_FLAGS.get("stays", True):
         entries.append(
             {
                 "loc": frontend_url("/stays"),
-                "lastmod": now,
                 "priority": "0.9",
                 "changefreq": "daily",
             }
         )
 
-    for listing in PropertyListing.objects.filter(status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE).only(
+    for listing in PropertyListing.objects.filter(
+        status=ListingStatus.PUBLISHED, availability_status=AvailabilityStatus.AVAILABLE
+    ).only(
         "slug",
         "updated_at",
     ):
@@ -77,7 +95,8 @@ def sitemap_xml(_request):
     for entry in sitemap_entries():
         lines.append("  <url>")
         lines.append(f"    <loc>{escape(entry['loc'])}</loc>")
-        lines.append(f"    <lastmod>{format_lastmod(entry['lastmod'])}</lastmod>")
+        if entry.get("lastmod"):
+            lines.append(f"    <lastmod>{format_lastmod(entry['lastmod'])}</lastmod>")
         lines.append(f"    <changefreq>{entry['changefreq']}</changefreq>")
         lines.append(f"    <priority>{entry['priority']}</priority>")
         lines.append("  </url>")
