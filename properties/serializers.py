@@ -288,6 +288,11 @@ class PropertyWriteSerializer(serializers.ModelSerializer):
         for key, value in attrs.items():
             if key != "amenities":
                 setattr(instance, key, value)
+        from .entitlements import consumes_slot, ensure_capacity
+        if consumes_slot(instance):
+            old = PropertyListing.objects.filter(pk=instance.pk).first()
+            if not old or not consumes_slot(old) or old.agency_id != instance.agency_id:
+                ensure_capacity(instance)
         try:
             instance.full_clean(exclude=["public_id", "slug"])
         except Exception as exc:

@@ -3,5 +3,5 @@ set -o errexit
 
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python manage.py migrate --no-input
+# Apply migrations separately at deployment time, never during an image build.
 python manage.py collectstatic --no-input

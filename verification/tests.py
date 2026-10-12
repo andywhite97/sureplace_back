@@ -123,7 +123,7 @@ class VerificationApiTests(APITestCase):
             verification_type=VerificationType.IDENTITY,
             status=RequestStatus.CHANGES_REQUESTED,
         )
-        document = VerificationDocument.objects.create(
+        VerificationDocument.objects.create(
             verification_request=request,
             document_type="NATIONAL_ID",
             file=SimpleUploadedFile("id.pdf", b"private"),

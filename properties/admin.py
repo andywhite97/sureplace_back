@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import Amenity, PropertyImage, PropertyListing
+from . import pricing_admin  # noqa: F401
 
 
 class PropertyImageInline(admin.TabularInline):

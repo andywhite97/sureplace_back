@@ -45,6 +45,25 @@ Headings use `Manrope, Arial, Helvetica, sans-serif`; body copy uses
 `Inter, Arial, Helvetica, sans-serif`. Email clients may ignore web fonts, so the
 templates must not rely on remote font loading.
 
+## Light and dark modes
+
+Inline colours are the light-mode fallback. Teal text and CTA backgrounds use
+`#087D69`, warning text uses `#99600B`, and information badges use `#2368B5`
+to maintain readable contrast against their light surfaces.
+
+`partials/theme.css`, included in the base template's style block, supplies a
+dark palette through `prefers-color-scheme` and Outlook's `data-ogsc`/`data-ogsb`
+wrapper selectors. Use the shared `sp-text`, `sp-muted`, `sp-accent`, `sp-card`,
+`sp-surface`, `sp-border`, `sp-cta`, and `sp-status-*` classes whenever adding
+coloured content. Pair background and foreground changes; leave listing photos
+unchanged. Custom logo images have a white backing to protect dark lettering.
+
+The rendering tests check normal text against its surfaces at a minimum 4.5:1
+contrast ratio in both authored palettes. Email clients vary in their support
+and some apply their own colour inversion, so check received previews in Apple
+Mail, Gmail, and Outlook in both modes before release. See the
+[email-client support table](https://www.caniemail.com/features/css-at-media-prefers-color-scheme/).
+
 The footer uses:
 
 ```text

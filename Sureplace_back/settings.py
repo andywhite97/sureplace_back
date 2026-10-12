@@ -1,6 +1,7 @@
 """Django settings for the SurePlace API."""
 
 from datetime import timedelta
+import os
 from pathlib import Path
 
 import environ
@@ -8,7 +9,7 @@ from core.storage import public_media_backend
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(DEBUG=(bool, False), USE_SQLITE=(bool, False))
-environ.Env.read_env(BASE_DIR / ".env")
+environ.Env.read_env(Path(os.environ.get("SUREPLACE_ENV_FILE", BASE_DIR / ".env")))
 
 SECRET_KEY = env("SECRET_KEY", default="unsafe-development-key-change-me")
 DEBUG = env("DEBUG")
@@ -184,6 +185,15 @@ PUBLIC_REFERENCE_CACHE_SECONDS = env.int("PUBLIC_REFERENCE_CACHE_SECONDS", defau
 FEATURED_LISTINGS_CACHE_SECONDS = env.int("FEATURED_LISTINGS_CACHE_SECONDS", default=60)
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
+CACHE_URL = env("CACHE_URL", default="")
+if CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_URL,
+            "KEY_PREFIX": "sureplace",
+        }
+    }
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_BROKER_CONNECTION_TIMEOUT = env.int("CELERY_BROKER_CONNECTION_TIMEOUT", default=2)
 CELERY_BROKER_TRANSPORT_OPTIONS = {
@@ -196,6 +206,8 @@ MESSAGE_EMAIL_COOLDOWN_MINUTES = env.int("MESSAGE_EMAIL_COOLDOWN_MINUTES", defau
 PROPERTY_AVAILABILITY_REMINDER_DAYS = env.int("PROPERTY_AVAILABILITY_REMINDER_DAYS", default=14)
 PROPERTY_AVAILABILITY_STALE_DAYS = env.int("PROPERTY_AVAILABILITY_STALE_DAYS", default=21)
 CELERY_BEAT_SCHEDULE = {
+    "stay-entitlements": {"task": "stays.tasks.process_stay_entitlements", "schedule": 3600},
+    "property-entitlements": {"task": "properties.tasks.process_property_entitlements", "schedule": 3600},
     "booking-reminders": {"task": "notifications.tasks.upcoming_booking_reminders", "schedule": 3600},
     "saved-searches": {
         "task": "notifications.tasks.evaluate_saved_searches",
@@ -212,6 +224,8 @@ MAP_DEFAULT_LATITUDE = env.float("MAP_DEFAULT_LATITUDE", default=-26.5225)
 MAP_DEFAULT_LONGITUDE = env.float("MAP_DEFAULT_LONGITUDE", default=31.4659)
 MAP_DEFAULT_ZOOM = env.int("MAP_DEFAULT_ZOOM", default=8)
 FEATURE_FLAGS = {
+    "stay_purchases": env.bool("STAY_PURCHASES_ENABLED", default=False),
+    "property_purchases": env.bool("PROPERTY_PURCHASES_ENABLED", default=False),
     "properties": env.bool("PROPERTIES_ENABLED", default=True),
     "stays": env.bool("STAYS_ENABLED", default=True),
     "bookings": env.bool("BOOKINGS_ENABLED", default=True),
@@ -245,8 +259,10 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", defa
 SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=False)
 
 if not DEBUG:
-    if SECRET_KEY == "unsafe-development-key-change-me":
-        raise RuntimeError("Set SECRET_KEY when DEBUG is false.")
+    if SECRET_KEY == "unsafe-development-key-change-me" or len(SECRET_KEY) < 50:
+        raise RuntimeError("Set a random SECRET_KEY of at least 50 characters when DEBUG is false.")
+    if not CACHE_URL:
+        raise RuntimeError("Set CACHE_URL to shared Redis for production throttling and caching.")
     if USE_SQLITE:
         raise RuntimeError("SQLite is not allowed when DEBUG is false.")
     if not USE_CLOUDINARY:
@@ -269,3 +285,9 @@ if not DEBUG:
             raise RuntimeError("BIRD_API_BASE_URL must be a supported Bird HTTPS regional host.")
     if any(host in {"localhost", "127.0.0.1"} for host in ALLOWED_HOSTS):
         raise RuntimeError("Production ALLOWED_HOSTS must not contain localhost.")
+
+# Paid expiry: retain published inventory; new publications fall back to free after grace.
+PROPERTY_SUBSCRIPTION_GRACE_DAYS = env.int('PROPERTY_SUBSCRIPTION_GRACE_DAYS', default=7)
+
+STAY_SUBSCRIPTION_GRACE_DAYS = env.int('STAY_SUBSCRIPTION_GRACE_DAYS', default=7)
+STAY_PURCHASES_ENABLED = env.bool('STAY_PURCHASES_ENABLED', default=False)

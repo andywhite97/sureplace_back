@@ -2,6 +2,9 @@
 
 Last updated: 2026-09-08
 
+Current review: [Production readiness — 10 October 2026](production-readiness-2026-10-10.md).
+Use that review for the current launch decision and validation results.
+
 ## Recommendation
 
 No-go for production launch from this local session alone.

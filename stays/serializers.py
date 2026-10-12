@@ -279,6 +279,28 @@ class StayWriteSerializer(serializers.ModelSerializer):
         obj.amenities.set(amenities)
         return obj
 
+    def update(self, instance, validated_data):
+        import copy
+        from django.core.exceptions import ValidationError as ModelValidationError
+        from .entitlements import lock_stay_owners
+        from .services import can_manage
+        from rest_framework.exceptions import PermissionDenied
+        candidate = copy.copy(instance)
+        for field, value in validated_data.items():
+            if field != "amenities":
+                setattr(candidate, field, value)
+        try:
+            with lock_stay_owners(candidate) as (current, _):
+                if (instance.owner_id, instance.agency_id) != (current.owner_id, current.agency_id):
+                    raise serializers.ValidationError("Stay ownership changed. Reload before saving.")
+                if not can_manage(self.context["request"].user, current):
+                    raise PermissionDenied()
+                # Preserve current read-only publication/ownership fields if a
+                # moderation or ownership action committed after the initial GET.
+                return super().update(current, validated_data)
+        except ModelValidationError as error:
+            raise serializers.ValidationError(error.message_dict if hasattr(error, "message_dict") else error.messages) from error
+
 
 class AvailabilitySerializer(serializers.ModelSerializer):
 

@@ -16,6 +16,9 @@ def api_exception_handler(exc, context):
         return response
     request = context.get("request")
     details = response.data
+    if getattr(exc, "default_code", None) in {"PROPERTY_LISTING_LIMIT_REACHED", "STAY_LISTING_LIMIT_REACHED"}:
+        response.data = {**details, "errors": details, "request_id": getattr(request, "request_id", None)}
+        return response
     message = "The request could not be completed."
     if isinstance(details, dict) and set(details) == {"detail"}:
         message = str(details["detail"])

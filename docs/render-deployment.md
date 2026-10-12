@@ -18,19 +18,19 @@ booking expiry, and availability reminders to the worker, so equivalent Render
 Cron Jobs must not also be configured. Web and Celery processes use the same image
 and environment. Runtime filesystem writes are never durable application media.
 
-## Blueprint deployment
+## Service deployment
 
-1. Connect the repository to a new Render Blueprint and select the repository-root
-   `render.yaml`.
-2. Choose appropriate paid plans and region for the database, Key Value, web,
-   worker, and Beat services. The Blueprint intentionally does not prescribe cost.
-3. Fill all `sync: false` variables. At minimum set `ALLOWED_HOSTS` to the Render
+1. Create a Docker web service from this backend repository. There is currently
+   no `render.yaml` in the repository; provision services through Render's dashboard.
+2. Choose plans and region for PostgreSQL/PostGIS, Key Value, web, worker and Beat.
+3. Import the completed ignored `.env.production` into a shared Environment Group.
+   At minimum set `ALLOWED_HOSTS` to the Render
    API hostname and custom API domain, `CORS_ALLOWED_ORIGINS`,
    `CSRF_TRUSTED_ORIGINS`, and `FRONTEND_BASE_URL` to the Angular HTTPS origin,
    all three Cloudinary values, and the production Bird email provider values.
-   Shared values may live in a Render Environment Group.
-4. Deploy. Docker installs GDAL/GEOS, `build.sh` installs Python dependencies and
-   collects WhiteNoise static assets, and `preDeployCommand` runs migrations.
+4. Configure `python manage.py migrate --noinput` as the web pre-deploy command.
+   Docker installs GDAL/GEOS; `build.sh` installs dependencies and collects static
+   assets. Migrations must run against the runtime database, never during image build.
 5. In a Render shell, run `python manage.py createsuperuser`.
 6. Verify `GET /api/health/` returns `{"status":"ok","database":"up"}`.
 7. Upload an avatar and listing image and confirm their URLs use Cloudinary.

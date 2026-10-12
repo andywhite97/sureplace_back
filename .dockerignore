@@ -1,4 +1,6 @@
 .env
+.env.*
+.booking-qa
 .venv
 __pycache__
 *.pyc

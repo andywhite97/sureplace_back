@@ -15,6 +15,7 @@ class HealthTests(TestCase):
         self.assertEqual(response.json()["database"], "up")
 
     @patch("redis.Redis.ping", return_value=True)
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/0")
     def test_readiness_checks_redis(self, ping):
         self.assertEqual(self.client.get("/api/v1/health/ready/").status_code, 200)
 

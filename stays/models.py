@@ -29,6 +29,7 @@ class StayStatus(models.TextChoices):
     DRAFT = "DRAFT", "Draft"
     SUBMITTED = "SUBMITTED", "Submitted"
     UNDER_REVIEW = "UNDER_REVIEW", "Under review"
+    CHANGES_REQUESTED = "CHANGES_REQUESTED", "Changes requested"
     PUBLISHED = "PUBLISHED", "Published"
     PAUSED = "PAUSED", "Paused"
     REJECTED = "REJECTED", "Rejected"
@@ -56,7 +57,23 @@ class StayAmenity(models.Model):
         return self.name
 
 
+class StayQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        if set(kwargs) & {"status", "owner", "owner_id", "agency", "agency_id", "agent", "agent_id"}:
+            raise ValidationError("Stay publication and ownership changes must use save() for entitlement enforcement.")
+        return super().update(**kwargs)
+
+    def bulk_create(self, objs, **kwargs):
+        raise ValidationError("Create stays individually so listing allowances are enforced.")
+
+    def bulk_update(self, objs, fields, **kwargs):
+        if set(fields) & {"status", "owner", "agency", "agent"}:
+            raise ValidationError("Bulk stay publication must save each listing in a transaction.")
+        return super().bulk_update(objs, fields, **kwargs)
+
+
 class Stay(TimeStampedModel):
+    objects = StayQuerySet.as_manager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     public_id = models.CharField(max_length=30, unique=True, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="stays")
@@ -89,13 +106,22 @@ class Stay(TimeStampedModel):
     verification_status = models.CharField(
         max_length=16, choices=VerificationStatus.choices, default=VerificationStatus.UNVERIFIED
     )
-    status = models.CharField(max_length=16, choices=StayStatus.choices, default=StayStatus.DRAFT)
+    status = models.CharField(max_length=20, choices=StayStatus.choices, default=StayStatus.DRAFT)
     featured = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("review_stay", "Review stay listings"),
+            ("approve_stay", "Approve stay listings"),
+            ("request_changes_stay", "Request stay listing changes"),
+            ("reject_stay", "Reject stay listings"),
+            ("suspend_stay", "Suspend stay listings"),
+            ("restore_stay", "Restore stay listings"),
+            ("add_note_stay", "Add internal stay listing notes"),
+        ]
         indexes = [
             models.Index(fields=["status", "-created_at"]),
             models.Index(fields=["status", "-published_at"]),
@@ -116,8 +142,33 @@ class Stay(TimeStampedModel):
             getattr(self, f) in (None, "") for f in ("name", "description", "region", "town", "location")
         ):
             raise ValidationError({"status": "Published stays require name, description, region, town, and location."})
+        from .entitlements import consumes_slot, ensure_capacity, StayListingLimitReached, entitlement_owner
+        old = type(self).objects.filter(pk=self.pk).first()
+        changing_scope = old and entitlement_owner(old) != entitlement_owner(self)
+        if changing_scope and StayListingAddOn.objects.filter(assigned_stay_id=self.pk).exists():
+            raise ValidationError({"agency": "A stay with entitlement history cannot change entitlement owners."})
+        if consumes_slot(self) and (not old or not consumes_slot(old) or changing_scope):
+            try:
+                ensure_capacity(self)
+            except StayListingLimitReached as error:
+                raise ValidationError({"status": error.detail["message"]}) from error
 
     def save(self, *args, **kwargs):
+        from .entitlements import lock_stay_owners, consumes_slot, ensure_capacity, activate_unit, entitlement_owner
+        from django.core.cache import cache
+        with lock_stay_owners(self, kwargs.get("update_fields")) as (old, effective):
+            changing_scope = old and entitlement_owner(old) != entitlement_owner(effective)
+            if changing_scope:
+                if StayListingAddOn.objects.filter(assigned_stay_id=self.pk).exists():
+                    raise ValidationError("A stay with entitlement history cannot change entitlement owners.")
+            entering = consumes_slot(effective) and (not old or not consumes_slot(old) or changing_scope)
+            unit = ensure_capacity(effective) if entering else None
+            self._save_listing_fields(*args, **kwargs)
+            if unit:
+                activate_unit(unit, self)
+            transaction.on_commit(lambda: cache.delete("stays:featured:v2"), robust=True)
+
+    def _save_listing_fields(self, *args, **kwargs):
         if not self.public_id:
             self.public_id = f"SP-STAY-{date.today().year}-{uuid.uuid4().hex[:10].upper()}"
         if not self.slug:
@@ -283,3 +334,6 @@ class RoomAvailability(TimeStampedModel):
     def clean(self):
         if self.room_type_id and self.available_units > self.room_type.quantity:
             raise ValidationError({"available_units": "Cannot exceed room quantity."})
+
+
+from .entitlement_models import StayPlan, StaySubscription, StayAddOnPackage, StayListingAddOn, StayPromotion, StayCapacityReview  # noqa: E402,F401

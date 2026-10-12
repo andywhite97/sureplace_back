@@ -90,12 +90,18 @@ class StaySubmissionError(ApiValidationError):
 
 @transaction.atomic
 def submit(stay):
+    from .entitlements import lock_owner, check_submission
+    candidate = Stay.objects.get(pk=stay.pk)
+    with lock_owner(candidate.owner_id, candidate.agency_id):
+        pass
     locked = Stay.objects.select_for_update().get(pk=stay.pk)
+    if (candidate.owner_id, candidate.agency_id) != (locked.owner_id, locked.agency_id):
+        raise ApiValidationError("Stay ownership changed. Reload and try again.")
     if locked.status in (StayStatus.SUBMITTED, StayStatus.UNDER_REVIEW):
         stay.refresh_from_db()
         return stay
-    if locked.status not in (StayStatus.DRAFT, StayStatus.REJECTED):
-        raise ApiValidationError({"status": "Only draft or rejected stays can be submitted."})
+    if locked.status not in (StayStatus.DRAFT, StayStatus.REJECTED, StayStatus.CHANGES_REQUESTED, StayStatus.PAUSED):
+        raise ApiValidationError({"status": "Only draft, rejected or changes-requested stays can be submitted."})
     rooms = list(locked.room_types.filter(is_active=True))
     if not rooms:
         raise StaySubmissionError(
@@ -110,6 +116,7 @@ def submit(stay):
             ) from error
     if not locked.location or not locked.region or not locked.town:
         raise StaySubmissionError("missing_location", "location", "Add the stay region, town and map location.")
+    check_submission(locked)
     locked.status = StayStatus.PUBLISHED
     try:
         locked.full_clean()

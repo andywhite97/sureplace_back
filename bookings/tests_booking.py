@@ -153,7 +153,7 @@ class BookingTests(TestCase):
         self.assertTrue(Notification.objects.filter(user=self.guest, notification_type=NotificationType.BOOKING_EXPIRED).exists())
 
     def test_guest_scope_excludes_hosted_bookings_and_room_calendar_is_private(self):
-        b = self.create()
+        self.create()
         host = self.api_client(self.host)
         self.assertEqual(host.get("/api/v1/bookings/?scope=guest").data["results"], [])
         self.assertEqual(host.get("/api/v1/bookings/?scope=manager").data["count"], 1)

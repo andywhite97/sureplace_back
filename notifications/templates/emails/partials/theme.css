@@ -1,0 +1,30 @@
+/* Inline styles provide the light fallback when a client strips this CSS. */
+@media (prefers-color-scheme: dark) {
+  .sp-page { background-color:#101B1A !important; }
+  .sp-card { background-color:#182B29 !important; }
+  .sp-surface { background-color:#203633 !important; }
+  .sp-border { border-color:#3E5954 !important; }
+  .sp-text { color:#F0F7F5 !important; }
+  .sp-muted { color:#B9CBC6 !important; }
+  .sp-accent { color:#62D9BE !important; }
+  .sp-status-success { background-color:#203F35 !important;color:#62D9BE !important; }
+  .sp-status-warning { background-color:#42341D !important;color:#FFD080 !important; }
+  .sp-status-error { background-color:#422929 !important;color:#FFB0B0 !important; }
+  .sp-status-info { background-color:#23384D !important;color:#A6CEFF !important; }
+  .sp-cta { background-color:#62D9BE !important;color:#101B1A !important; }
+  .sp-logo { background-color:#FFFFFF !important;color:#152B2A !important; }
+}
+/* Outlook adds these attributes to its dark-mode message wrapper. */
+[data-ogsc] .sp-page, [data-ogsb] .sp-page { background-color:#101B1A !important; }
+[data-ogsc] .sp-card, [data-ogsb] .sp-card { background-color:#182B29 !important; }
+[data-ogsc] .sp-surface, [data-ogsb] .sp-surface { background-color:#203633 !important; }
+[data-ogsc] .sp-border, [data-ogsb] .sp-border { border-color:#3E5954 !important; }
+[data-ogsc] .sp-text, [data-ogsb] .sp-text { color:#F0F7F5 !important; }
+[data-ogsc] .sp-muted, [data-ogsb] .sp-muted { color:#B9CBC6 !important; }
+[data-ogsc] .sp-accent, [data-ogsb] .sp-accent { color:#62D9BE !important; }
+[data-ogsc] .sp-status-success, [data-ogsb] .sp-status-success { background-color:#203F35 !important;color:#62D9BE !important; }
+[data-ogsc] .sp-status-warning, [data-ogsb] .sp-status-warning { background-color:#42341D !important;color:#FFD080 !important; }
+[data-ogsc] .sp-status-error, [data-ogsb] .sp-status-error { background-color:#422929 !important;color:#FFB0B0 !important; }
+[data-ogsc] .sp-status-info, [data-ogsb] .sp-status-info { background-color:#23384D !important;color:#A6CEFF !important; }
+[data-ogsc] .sp-cta, [data-ogsb] .sp-cta { background-color:#62D9BE !important;color:#101B1A !important; }
+[data-ogsc] .sp-logo, [data-ogsb] .sp-logo { background-color:#FFFFFF !important;color:#152B2A !important; }

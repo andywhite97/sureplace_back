@@ -59,6 +59,22 @@ STAFF_PERMISSION_CATALOG = (
         "description": "Record outcomes for listing reports.",
     },
 )
+STAFF_PERMISSION_CATALOG += tuple(
+    {
+        "key": f"stays.{action}_stay",
+        "label": label,
+        "description": "Review and moderate stay listings with an audited decision.",
+    }
+    for action, label in (
+        ("review", "Review stay listings"),
+        ("approve", "Approve stay listings"),
+        ("request_changes", "Request stay listing changes"),
+        ("reject", "Reject stay listings"),
+        ("suspend", "Suspend stay listings"),
+        ("restore", "Restore stay listings"),
+        ("add_note", "Add internal stay notes"),
+    )
+)
 STAFF_PERMISSION_KEYS = frozenset(item["key"] for item in STAFF_PERMISSION_CATALOG)
 
 

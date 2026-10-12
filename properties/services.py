@@ -1,4 +1,4 @@
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, ValidationError
 from django.utils import timezone
 from django.core.cache import cache
 from django.db import transaction
@@ -15,10 +15,12 @@ class InvalidListingTransition(APIException):
 
 
 def submit_listing(listing):
-    if listing.status not in {ListingStatus.DRAFT, ListingStatus.REJECTED, ListingStatus.CHANGES_REQUESTED}:
+    if listing.status not in {ListingStatus.DRAFT, ListingStatus.REJECTED, ListingStatus.CHANGES_REQUESTED, ListingStatus.PAUSED, ListingStatus.EXPIRED}:
         if listing.status == ListingStatus.PUBLISHED:
             raise InvalidListingTransition("This property is already approved and published.")
         raise InvalidListingTransition("Only draft, rejected or changes-requested listings can be submitted.")
+    from .entitlements import check_submission
+    check_submission(listing)
     listing.status = ListingStatus.PUBLISHED
     listing.full_clean()
     listing.status = ListingStatus.SUBMITTED

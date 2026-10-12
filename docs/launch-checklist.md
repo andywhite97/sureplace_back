@@ -2,6 +2,9 @@
 
 Last updated: 2026-09-08
 
+Current review: [Production readiness — 10 October 2026](production-readiness-2026-10-10.md).
+The historical status below is superseded by that review and its launch gates.
+
 ## Required Before Production
 
 - Frontend unit tests pass with `cmd /c npm test -- --watch=false` from `sureplace`.

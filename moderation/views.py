@@ -1,4 +1,5 @@
 from django.db.models import Count, Q
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -228,6 +229,8 @@ class StaffPropertyModerationViewSet(viewsets.ReadOnlyModelViewSet):
         listing = self.get_object()
         if listing.status not in {ListingStatus.SUBMITTED, ListingStatus.UNDER_REVIEW}:
             raise ValidationError({"status": "Only submitted or under-review listings can be approved."})
+        from properties.entitlements import check_submission
+        check_submission(listing)
         listing.status = ListingStatus.PUBLISHED
         try:
             listing.full_clean()
@@ -365,6 +368,7 @@ class StaffPropertyModerationViewSet(viewsets.ReadOnlyModelViewSet):
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAdminUser])
+@transaction.atomic
 def listing_action(r, target_type, target_id, action_name):
     if target_type not in {"property", "stay"} or action_name not in {"suspend", "pause", "unpublish", "reinstate"}:
         raise NotFound()
@@ -373,10 +377,32 @@ def listing_action(r, target_type, target_id, action_name):
         if target_type == "property"
         else __import__("stays.models", fromlist=["Stay"]).Stay
     )
+    if target_type in {"property", "stay"}:
+        from core.entitlement_utils import lock_owner
+        try:
+            candidate = Model.objects.get(pk=target_id)
+        except Model.DoesNotExist:
+            raise NotFound()
+        # Keep owner-before-listing lock order consistent with publication/expiry.
+        with lock_owner(candidate.owner_id, candidate.agency_id):
+            pass
     try:
-        obj = Model.objects.get(pk=target_id)
+        obj = Model.objects.select_for_update().get(pk=target_id)
     except Model.DoesNotExist:
         raise NotFound()
+    if target_type == "stay":
+        from rest_framework.exceptions import PermissionDenied
+        permission = "stays.restore_stay" if action_name == "reinstate" else "stays.suspend_stay"
+        if not r.user.has_perm(permission):
+            raise PermissionDenied("You do not have permission to moderate stay listings.")
+        if action_name != "reinstate" and obj.status != "PUBLISHED":
+            raise ValidationError({"status": "Only published stays can be paused or suspended."})
+        if action_name == "reinstate":
+            if obj.status not in {"SUSPENDED", "PAUSED"}:
+                raise ValidationError({"status": "Only suspended or paused stays can be reinstated."})
+            # Keep the legacy operation from bypassing publication checks.
+            from .stays import StaffStayModerationViewSet
+            StaffStayModerationViewSet()._validate_publication(obj)
     reason = r.data.get("reason", "").strip()
     if action_name in {"suspend", "unpublish"} and not reason:
         raise ValidationError({"reason": "A reason is required."})

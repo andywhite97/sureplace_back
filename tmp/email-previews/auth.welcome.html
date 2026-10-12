@@ -4,8 +4,42 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="x-apple-disable-message-reformatting">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>Welcome to SurePlace</title>
     <style>
+      :root { color-scheme: light dark; supported-color-schemes: light dark; }
+      /* Inline styles provide the light fallback when a client strips this CSS. */
+@media (prefers-color-scheme: dark) {
+  .sp-page { background-color:#101B1A !important; }
+  .sp-card { background-color:#182B29 !important; }
+  .sp-surface { background-color:#203633 !important; }
+  .sp-border { border-color:#3E5954 !important; }
+  .sp-text { color:#F0F7F5 !important; }
+  .sp-muted { color:#B9CBC6 !important; }
+  .sp-accent { color:#62D9BE !important; }
+  .sp-status-success { background-color:#203F35 !important;color:#62D9BE !important; }
+  .sp-status-warning { background-color:#42341D !important;color:#FFD080 !important; }
+  .sp-status-error { background-color:#422929 !important;color:#FFB0B0 !important; }
+  .sp-status-info { background-color:#23384D !important;color:#A6CEFF !important; }
+  .sp-cta { background-color:#62D9BE !important;color:#101B1A !important; }
+  .sp-logo { background-color:#FFFFFF !important;color:#152B2A !important; }
+}
+/* Outlook adds these attributes to its dark-mode message wrapper. */
+[data-ogsc] .sp-page, [data-ogsb] .sp-page { background-color:#101B1A !important; }
+[data-ogsc] .sp-card, [data-ogsb] .sp-card { background-color:#182B29 !important; }
+[data-ogsc] .sp-surface, [data-ogsb] .sp-surface { background-color:#203633 !important; }
+[data-ogsc] .sp-border, [data-ogsb] .sp-border { border-color:#3E5954 !important; }
+[data-ogsc] .sp-text, [data-ogsb] .sp-text { color:#F0F7F5 !important; }
+[data-ogsc] .sp-muted, [data-ogsb] .sp-muted { color:#B9CBC6 !important; }
+[data-ogsc] .sp-accent, [data-ogsb] .sp-accent { color:#62D9BE !important; }
+[data-ogsc] .sp-status-success, [data-ogsb] .sp-status-success { background-color:#203F35 !important;color:#62D9BE !important; }
+[data-ogsc] .sp-status-warning, [data-ogsb] .sp-status-warning { background-color:#42341D !important;color:#FFD080 !important; }
+[data-ogsc] .sp-status-error, [data-ogsb] .sp-status-error { background-color:#422929 !important;color:#FFB0B0 !important; }
+[data-ogsc] .sp-status-info, [data-ogsb] .sp-status-info { background-color:#23384D !important;color:#A6CEFF !important; }
+[data-ogsc] .sp-cta, [data-ogsb] .sp-cta { background-color:#62D9BE !important;color:#101B1A !important; }
+[data-ogsc] .sp-logo, [data-ogsb] .sp-logo { background-color:#FFFFFF !important;color:#152B2A !important; }
+
       @media only screen and (max-width: 640px) {
         .sp-shell { width: 100% !important; }
         .sp-pad { padding-left: 20px !important; padding-right: 20px !important; }
@@ -15,26 +49,26 @@
       }
     </style>
   </head>
-  <body style="margin:0;padding:0;background:#F6F9F8;color:#152B2A;font-family:Inter,Arial,Helvetica,sans-serif;">
+  <body class="sp-page sp-text" style="margin:0;padding:0;background:#F6F9F8;color:#152B2A;font-family:Inter,Arial,Helvetica,sans-serif;">
     
       <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">Your SurePlace account is ready.</div>
     
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F9F8;margin:0;padding:28px 12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="sp-page" style="background:#F6F9F8;margin:0;padding:28px 12px;">
       <tr>
         <td align="center">
-          <table role="presentation" class="sp-shell" width="620" cellpadding="0" cellspacing="0" style="width:620px;max-width:620px;background:#FFFFFF;border:1px solid #E4ECE9;border-radius:12px;overflow:hidden;box-shadow:0 16px 40px rgba(21,43,42,0.08);">
+          <table role="presentation" class="sp-shell sp-card sp-border" width="620" cellpadding="0" cellspacing="0" style="width:620px;max-width:620px;background:#FFFFFF;border:1px solid #E4ECE9;border-radius:12px;overflow:hidden;box-shadow:0 16px 40px rgba(21,43,42,0.08);">
             <tr>
-              <td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #E4ECE9;">
+              <td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="sp-border" style="border-bottom:1px solid #E4ECE9;">
   <tr>
     <td style="padding:20px 34px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td align="left" style="font-family:Manrope,Arial,Helvetica,sans-serif;font-size:22px;font-weight:800;color:#152B2A;">
+          <td align="left" class="sp-text" style="font-family:Manrope,Arial,Helvetica,sans-serif;font-size:22px;font-weight:800;color:#152B2A;">
             
-              <span style="color:#0F9D83;">Sure</span><span style="color:#152B2A;">Place</span>
+              <span class="sp-accent" style="color:#087D69;">Sure</span><span class="sp-text" style="color:#152B2A;">Place</span>
             
           </td>
-          <td class="sp-tagline" align="right" style="font-size:13px;color:#647471;">Property. Without the noise.</td>
+          <td class="sp-tagline sp-muted" align="right" style="font-size:13px;color:#647471;">Property. Without the noise.</td>
         </tr>
       </table>
     </td>
@@ -46,20 +80,20 @@
               <td class="sp-pad" style="padding:30px 34px 28px 34px;">
                 
 
-  <div style="width:44px;height:44px;border-radius:22px;background:#E8F6F3;color:#0F9D83;text-align:center;line-height:44px;font-size:20px;font-weight:800;">&#10003;</div>
+  <div class="sp-accent sp-status-success" style="width:44px;height:44px;border-radius:22px;background:#E8F6F3;color:#087D69;text-align:center;line-height:44px;font-size:20px;font-weight:800;">&#10003;</div>
 
 
-<h1 style="margin:18px 0 0 0;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:28px;line-height:34px;color:#152B2A;">Welcome to SurePlace</h1>
-<p style="margin:14px 0 0 0;font-size:16px;line-height:24px;color:#647471;">Your account is ready. You can now explore properties, save favourites, request viewings, book stays, and message hosts or agents.</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0 0;background:#F6F9F8;border:1px solid #E4ECE9;border-radius:12px;">
-  <tr><td style="padding:14px 16px 6px 16px;font-size:13px;line-height:18px;color:#647471;font-weight:800;text-transform:uppercase;">Get started</td></tr>
-  <tr><td style="padding:6px 16px 14px 16px;font-size:15px;line-height:24px;color:#152B2A;">Search properties<br>Save favourites<br>Request viewings<br>Book stays</td></tr>
+<h1 class="sp-text" style="margin:18px 0 0 0;font-family:Manrope,Arial,Helvetica,sans-serif;font-size:28px;line-height:34px;color:#152B2A;">Welcome to SurePlace</h1>
+<p class="sp-muted" style="margin:14px 0 0 0;font-size:16px;line-height:24px;color:#647471;">Your account is ready. You can now explore properties, save favourites, request viewings, book stays, and message hosts or agents.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="sp-surface sp-border" style="margin:22px 0 0 0;background:#F6F9F8;border:1px solid #E4ECE9;border-radius:12px;">
+  <tr><td class="sp-muted" style="padding:14px 16px 6px 16px;font-size:13px;line-height:18px;color:#647471;font-weight:800;text-transform:uppercase;">Get started</td></tr>
+  <tr><td class="sp-text" style="padding:6px 16px 14px 16px;font-size:15px;line-height:24px;color:#152B2A;">Search properties<br>Save favourites<br>Request viewings<br>Book stays</td></tr>
 </table>
 
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 0 0;">
   <tr>
-    <td align="center" bgcolor="#0F9D83" style="border-radius:12px;">
-      <a class="sp-button" href="http://localhost:4200/properties" style="display:inline-block;min-width:190px;padding:14px 24px;border-radius:12px;background:#0F9D83;color:#FFFFFF;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;font-weight:800;text-align:center;text-decoration:none;">Explore Properties</a>
+    <td align="center" bgcolor="#087D69" class="sp-cta" style="border-radius:12px;">
+      <a class="sp-button sp-cta" href="http://localhost:4200/properties" style="display:inline-block;min-width:190px;padding:14px 24px;border-radius:12px;background:#087D69;color:#FFFFFF;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;font-weight:800;text-align:center;text-decoration:none;">Explore Properties</a>
     </td>
   </tr>
 </table>
@@ -70,10 +104,10 @@
               </td>
             </tr>
             <tr>
-              <td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E4ECE9;background:#F6F9F8;">
+              <td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="sp-surface sp-border" style="border-top:1px solid #E4ECE9;background:#F6F9F8;">
   <tr>
-    <td style="padding:22px 34px;font-size:13px;line-height:20px;color:#647471;">
-      <strong style="font-family:Manrope,Arial,Helvetica,sans-serif;color:#152B2A;">SurePlace</strong><br>
+    <td class="sp-muted" style="padding:22px 34px;font-size:13px;line-height:20px;color:#647471;">
+      <strong class="sp-text" style="font-family:Manrope,Arial,Helvetica,sans-serif;color:#152B2A;">SurePlace</strong><br>
       Property. Without the noise.<br>
       &copy; 2026 SurePlace
       

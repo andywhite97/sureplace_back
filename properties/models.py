@@ -67,7 +67,23 @@ class Amenity(models.Model):
         return self.name
 
 
+class PropertyListingQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        if set(kwargs) & {"status", "availability_status", "owner", "owner_id", "agency", "agency_id", "agent", "agent_id"}:
+            raise ValidationError("Publication and ownership changes must use listing.save() for entitlement enforcement.")
+        return super().update(**kwargs)
+
+    def bulk_create(self, objs, **kwargs):
+        raise ValidationError("Create property listings individually so publication limits are enforced.")
+
+    def bulk_update(self, objs, fields, **kwargs):
+        if set(fields) & {"status", "availability_status", "owner", "agency", "agent"}:
+            raise ValidationError("Bulk publication must save each listing in a transaction.")
+        return super().bulk_update(objs, fields, **kwargs)
+
+
 class PropertyListing(TimeStampedModel):
+    objects = PropertyListingQuerySet.as_manager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     public_id = models.CharField(max_length=24, unique=True, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="property_listings")
@@ -173,12 +189,38 @@ class PropertyListing(TimeStampedModel):
                 errors["status"] = f"Published listings require: {', '.join(missing)}."
         if errors:
             raise ValidationError(errors)
+        from .entitlements import consumes_slot, ensure_capacity, PropertyListingLimitReached
+        old = type(self).objects.filter(pk=self.pk).first()
+        if consumes_slot(self) and (not old or not consumes_slot(old) or old.agency_id != self.agency_id or (not self.agency_id and old.owner_id != self.owner_id)):
+            try:
+                ensure_capacity(self)
+            except PropertyListingLimitReached as exc:
+                raise ValidationError({"status": exc.detail["message"]}) from exc
 
     def save(self, *args, **kwargs):
-        self._set_unique_identifiers()
-        if self.status == ListingStatus.PUBLISHED and self.published_at is None:
-            self.published_at = timezone.now()
-        super().save(*args, **kwargs)
+        from .entitlements import lock_listing_owners, consumes_slot, ensure_capacity, activate_unit
+
+        with lock_listing_owners(self, kwargs.get("update_fields")) as old:
+            fields = kwargs.get("update_fields")
+            # Validate the actual state being written, including partial saves.
+            effective = self
+            if old and fields is not None:
+                import copy
+                effective = copy.copy(old)
+                for field in fields:
+                    setattr(effective, field, getattr(self, field))
+            if old and (old.owner_id != effective.owner_id or old.agency_id != effective.agency_id):
+                if PropertyListingAddOn.objects.filter(assigned_property_id=self.pk).exists():
+                    raise ValidationError("A property with entitlement history cannot change subscription owners.")
+            entering = consumes_slot(effective) and (not old or not consumes_slot(old) or old.agency_id != effective.agency_id or (not effective.agency_id and old.owner_id != effective.owner_id))
+            unit = ensure_capacity(effective) if entering else None
+            self._set_unique_identifiers()
+            if self.status == ListingStatus.PUBLISHED and self.published_at is None:
+                self.published_at = timezone.now()
+            super().save(*args, **kwargs)
+            if unit:
+                activate_unit(unit, self)
+            transaction.on_commit(lambda: __import__("django.core.cache", fromlist=["cache"]).cache.delete("properties:featured:v2"), robust=True)
 
     @property
     def latitude(self):
@@ -224,3 +266,6 @@ class PropertyImage(models.Model):
 
     def __str__(self):
         return self.caption or f"Image for {self.property.public_id}"
+
+
+from .entitlement_models import PropertyPlan, PropertyAddOnPackage, PropertySubscription, PropertyListingAddOn  # noqa: E402,F401

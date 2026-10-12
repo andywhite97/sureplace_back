@@ -1,8 +1,14 @@
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from core.views import config, health, ready, reference
+from properties.pricing_views import property_pricing, property_entitlements
+from stays.pricing_views import stay_pricing, stay_entitlements
 
 urlpatterns = [
+    path("pricing/stays/", stay_pricing, name="stay-pricing"),
+    path("account/stay-entitlements/", stay_entitlements, name="stay-entitlements"),
+    path("pricing/properties/", property_pricing, name="property-pricing"),
+    path("account/property-entitlements/", property_entitlements, name="property-entitlements"),
     path("health/", health, name="health"),
     path("health/ready/", ready, name="ready"),
     path("reference/", reference, name="reference"),

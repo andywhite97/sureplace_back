@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from messaging.services import create_conversation, system_message
-from stays.models import BookingMode, RoomAvailability, RoomType, StayStatus
+from stays.models import BookingMode, RoomAvailability, RoomType, StayStatus, Stay
 from stays.services import can_manage
 from .models import Booking, BookingEvent, BookingStatus
 
@@ -57,7 +57,10 @@ def create_booking(
         existing = Booking.objects.filter(guest=guest, idempotency_key=idempotency_key).first()
         if existing:
             return existing
-    room = RoomType.objects.select_for_update().select_related("stay").get(pk=room_type.pk)
+    room = RoomType.objects.select_for_update(of=("self",)).get(pk=room_type.pk)
+    # Explicit room-before-stay order coordinates with booking-safe entitlement
+    # expiry and re-reads publication state after waiting for concurrent writes.
+    room.stay = Stay.objects.select_for_update().get(pk=room.stay_id)
     # A concurrent retry may have committed while this request waited for the room lock.
     if idempotency_key:
         existing = Booking.objects.filter(guest=guest, idempotency_key=idempotency_key).first()

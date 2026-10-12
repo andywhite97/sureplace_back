@@ -288,6 +288,13 @@ class PropertyAPITests(APITestCase):
         self.assertEqual(self.published.availability_status, AvailabilityStatus.AVAILABLE)
         self.assertIsNotNone(self.published.availability_confirmed_at)
 
+    def test_draft_listing_cannot_be_paused(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(f"/api/properties/{self.draft.id}/pause/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.status, ListingStatus.DRAFT)
+
     def test_unavailable_listing_is_hidden_and_can_be_confirmed_again(self):
         self.client.force_authenticate(self.owner)
         response = self.client.post(f"/api/properties/{self.published.id}/mark-unavailable/")
