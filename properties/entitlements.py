@@ -55,7 +55,7 @@ def lock_listing_owners(listing, update_fields=None):
             scopes, key=lambda value: ("agency" if value[1] else "account", str(value[1] or value[0]))
         ):
             stack.enter_context(lock_owner(account_id, agency_id))
-        current = PropertyListing.objects.filter(pk=listing.pk).first()
+        current = PropertyListing.objects.select_for_update().filter(pk=listing.pk).first()
         if before and current and (before.owner_id, before.agency_id) != (current.owner_id, current.agency_id):
             raise ValidationError("Property ownership changed during this request. Reload and try again.")
         yield current

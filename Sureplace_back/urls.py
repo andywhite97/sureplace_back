@@ -6,6 +6,7 @@ from django.urls import include, path
 from core.seo import sitemap_xml
 
 urlpatterns = [
+    path("api/", include("core.transfers")),
     path("admin/", admin.site.urls),
     path("sitemap.xml", sitemap_xml, name="sitemap"),
     path("api/v1/", include(("Sureplace_back.api_urls", "api_v1"), namespace="v1")),

@@ -9,3 +9,5 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
+
+from .transfer_models import ListingTransfer  # noqa: E402,F401

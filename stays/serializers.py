@@ -269,6 +269,8 @@ class StayWriteSerializer(serializers.ModelSerializer):
         if agent and not agency:
             a["agency"] = agent.agency
             agency = agent.agency
+        if self.instance and agency != self.instance.agency:
+            raise serializers.ValidationError({"agency": "Use a listing transfer to change the managing agency."})
         if agency and not user.is_staff and not user.agent_profiles.filter(agency=agency, is_active=True).exists():
             raise serializers.ValidationError({"agency": "You must be active staff of this agency."})
         return a

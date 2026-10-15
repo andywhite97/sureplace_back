@@ -279,6 +279,8 @@ class PropertyWriteSerializer(serializers.ModelSerializer):
         if agent and not agency:
             attrs["agency"] = agent.agency
             agency = agent.agency
+        if self.instance and agency != self.instance.agency:
+            raise serializers.ValidationError({"agency": "Use a listing transfer to change the managing agency."})
         if (agency or agent) and not request.user.is_staff:
             permitted = AgentProfile.objects.filter(user=request.user, agency=agency, is_active=True).exists()
             if not permitted:
@@ -309,7 +311,19 @@ class PropertyWriteSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         amenities = validated_data.pop("amenities", None)
-        instance = super().update(instance, validated_data)
-        if amenities is not None:
-            instance.amenities.set(amenities)
-        return instance
+        from .entitlements import lock_listing_owners
+        from .permissions import can_manage_property
+        from rest_framework.exceptions import PermissionDenied
+        from django.core.exceptions import ValidationError as ModelValidationError
+        try:
+            with lock_listing_owners(instance) as current:
+                if (instance.owner_id, instance.agency_id) != (current.owner_id, current.agency_id):
+                    raise serializers.ValidationError("Ownership changed. Reload before saving.")
+                if not can_manage_property(self.context["request"].user, current):
+                    raise PermissionDenied()
+                instance = super().update(current, validated_data)
+                if amenities is not None:
+                    instance.amenities.set(amenities)
+                return instance
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
