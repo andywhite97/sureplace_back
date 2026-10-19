@@ -11,6 +11,7 @@ from django.utils.text import slugify
 
 from core.choices import VerificationStatus
 from core.models import TimeStampedModel
+from core.social_links import validate_facebook_url, validate_instagram_url, validate_tiktok_url
 from .fields import location_field
 
 
@@ -118,6 +119,9 @@ class PropertyListing(TimeStampedModel):
     furnished = models.BooleanField(default=False)
     pet_friendly = models.BooleanField(default=False)
     amenities = models.ManyToManyField(Amenity, blank=True, related_name="properties")
+    facebook_url = models.URLField(blank=True, validators=[validate_facebook_url])
+    instagram_url = models.URLField(blank=True, validators=[validate_instagram_url])
+    tiktok_url = models.URLField(blank=True, validators=[validate_tiktok_url])
     status = models.CharField(max_length=24, choices=ListingStatus.choices, default=ListingStatus.DRAFT)
     verification_status = models.CharField(
         max_length=16, choices=VerificationStatus.choices, default=VerificationStatus.UNVERIFIED

@@ -7,6 +7,7 @@ from django.utils import timezone
 from accounts.models import phone_validator
 from core.choices import VerificationStatus
 from core.models import TimeStampedModel
+from core.social_links import validate_facebook_url, validate_instagram_url, validate_tiktok_url
 
 
 class Agency(TimeStampedModel):
@@ -20,6 +21,9 @@ class Agency(TimeStampedModel):
     email = models.EmailField(blank=True)
     whatsapp_number = models.CharField(max_length=16, blank=True, validators=[phone_validator])
     website = models.URLField(blank=True)
+    facebook_url = models.URLField(blank=True, validators=[validate_facebook_url])
+    instagram_url = models.URLField(blank=True, validators=[validate_instagram_url])
+    tiktok_url = models.URLField(blank=True, validators=[validate_tiktok_url])
     address = models.TextField(blank=True)
     region = models.CharField(max_length=100, blank=True)
     town = models.CharField(max_length=100, blank=True)

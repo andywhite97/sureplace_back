@@ -11,6 +11,7 @@ from accounts.models import phone_validator
 from core.choices import VerificationStatus
 from core.models import TimeStampedModel
 from properties.fields import location_field
+from core.social_links import validate_facebook_url, validate_instagram_url, validate_tiktok_url
 
 
 class StayType(models.TextChoices):
@@ -97,6 +98,9 @@ class Stay(TimeStampedModel):
     email = models.EmailField(blank=True)
     whatsapp_number = models.CharField(max_length=16, blank=True, validators=[phone_validator])
     website = models.URLField(blank=True)
+    facebook_url = models.URLField(blank=True, validators=[validate_facebook_url])
+    instagram_url = models.URLField(blank=True, validators=[validate_instagram_url])
+    tiktok_url = models.URLField(blank=True, validators=[validate_tiktok_url])
     check_in_time = models.TimeField(null=True, blank=True)
     check_out_time = models.TimeField(null=True, blank=True)
     booking_mode = models.CharField(max_length=20, choices=BookingMode.choices, default=BookingMode.REQUEST_TO_BOOK)
