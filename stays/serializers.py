@@ -1,3 +1,4 @@
+from core.social import SocialValidationMixin
 from django.conf import settings
 from rest_framework import serializers
 from .models import *
@@ -229,7 +230,7 @@ class StayDetailSerializer(HostMixin, serializers.ModelSerializer):
         return data
 
 
-class StayWriteSerializer(serializers.ModelSerializer):
+class StayWriteSerializer(SocialValidationMixin, serializers.ModelSerializer):
     latitude = serializers.FloatField(write_only=True, required=False)
     longitude = serializers.FloatField(write_only=True, required=False)
     amenities = serializers.PrimaryKeyRelatedField(

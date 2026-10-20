@@ -1,3 +1,4 @@
+from core.social import public_https, facebook_url, instagram_url, tiktok_url, whatsapp_number as validate_whatsapp
 import uuid
 
 from django.conf import settings
@@ -10,6 +11,9 @@ from core.models import TimeStampedModel
 
 
 class Agency(TimeStampedModel):
+    facebook_url = models.URLField(blank=True, db_default="", max_length=500, validators=[facebook_url])
+    instagram_url = models.URLField(blank=True, db_default="", max_length=500, validators=[instagram_url])
+    tiktok_url = models.URLField(blank=True, db_default="", max_length=500, validators=[tiktok_url])
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     trading_name = models.CharField(max_length=255, blank=True)
@@ -18,8 +22,8 @@ class Agency(TimeStampedModel):
     description = models.TextField(blank=True)
     phone = models.CharField(max_length=16, blank=True, validators=[phone_validator])
     email = models.EmailField(blank=True)
-    whatsapp_number = models.CharField(max_length=16, blank=True, validators=[phone_validator])
-    website = models.URLField(blank=True)
+    whatsapp_number = models.CharField(max_length=16, blank=True, validators=[validate_whatsapp])
+    website = models.URLField(blank=True, validators=[public_https])
     address = models.TextField(blank=True)
     region = models.CharField(max_length=100, blank=True)
     town = models.CharField(max_length=100, blank=True)

@@ -11,3 +11,5 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 from .transfer_models import ListingTransfer  # noqa: E402,F401
+
+from .onboarding_models import OnboardingProspect, OnboardingPreview, OnboardingImage, OnboardingAudit  # noqa: E402,F401

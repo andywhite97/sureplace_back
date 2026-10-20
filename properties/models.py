@@ -1,3 +1,4 @@
+from core.social import public_https, facebook_url, instagram_url, tiktok_url, whatsapp_number as validate_whatsapp
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -83,6 +84,11 @@ class PropertyListingQuerySet(models.QuerySet):
 
 
 class PropertyListing(TimeStampedModel):
+    facebook_url = models.URLField(blank=True, db_default="", max_length=500, validators=[facebook_url])
+    instagram_url = models.URLField(blank=True, db_default="", max_length=500, validators=[instagram_url])
+    tiktok_url = models.URLField(blank=True, db_default="", max_length=500, validators=[tiktok_url])
+    website = models.URLField(blank=True, db_default="", validators=[public_https])
+    whatsapp_number = models.CharField(max_length=16, blank=True, db_default="", validators=[validate_whatsapp])
     objects = PropertyListingQuerySet.as_manager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     public_id = models.CharField(max_length=24, unique=True, editable=False)

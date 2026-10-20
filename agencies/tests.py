@@ -51,7 +51,7 @@ class AgencyApiTests(APITestCase):
             "email": "hello@lusito.example",
             "phone": "+26876123456",
             "whatsapp_number": "+26876123456",
-            "website": "https://lusito.example",
+            "website": "https://lusito.example.com",
             "region": "Hhohho",
             "town": "Mbabane",
             "suburb": "Sidwashini",

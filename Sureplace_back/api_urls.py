@@ -5,6 +5,7 @@ from properties.pricing_views import property_pricing, property_entitlements
 from stays.pricing_views import stay_pricing, stay_entitlements
 
 urlpatterns = [
+    path("", include("core.onboarding")),
     path("", include("core.transfers")),
     path("pricing/stays/", stay_pricing, name="stay-pricing"),
     path("account/stay-entitlements/", stay_entitlements, name="stay-entitlements"),

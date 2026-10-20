@@ -1,3 +1,4 @@
+from core.social import public_https, facebook_url, instagram_url, tiktok_url, whatsapp_number as validate_whatsapp
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -73,6 +74,9 @@ class StayQuerySet(models.QuerySet):
 
 
 class Stay(TimeStampedModel):
+    facebook_url = models.URLField(blank=True, db_default="", max_length=500, validators=[facebook_url])
+    instagram_url = models.URLField(blank=True, db_default="", max_length=500, validators=[instagram_url])
+    tiktok_url = models.URLField(blank=True, db_default="", max_length=500, validators=[tiktok_url])
     objects = StayQuerySet.as_manager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     public_id = models.CharField(max_length=30, unique=True, editable=False)
@@ -95,8 +99,8 @@ class Stay(TimeStampedModel):
     location = location_field()
     phone = models.CharField(max_length=16, blank=True, validators=[phone_validator])
     email = models.EmailField(blank=True)
-    whatsapp_number = models.CharField(max_length=16, blank=True, validators=[phone_validator])
-    website = models.URLField(blank=True)
+    whatsapp_number = models.CharField(max_length=16, blank=True, validators=[validate_whatsapp])
+    website = models.URLField(blank=True, validators=[public_https])
     check_in_time = models.TimeField(null=True, blank=True)
     check_out_time = models.TimeField(null=True, blank=True)
     booking_mode = models.CharField(max_length=20, choices=BookingMode.choices, default=BookingMode.REQUEST_TO_BOOK)

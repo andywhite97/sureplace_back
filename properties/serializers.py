@@ -1,3 +1,4 @@
+from core.social import SocialValidationMixin
 from django.conf import settings
 from rest_framework import serializers
 
@@ -199,7 +200,7 @@ class PropertyDetailSerializer(AdvertiserMixin, LocationMixin, serializers.Model
         return data
 
 
-class PropertyWriteSerializer(serializers.ModelSerializer):
+class PropertyWriteSerializer(SocialValidationMixin, serializers.ModelSerializer):
     latitude = serializers.FloatField(write_only=True, required=False, min_value=-90, max_value=90)
     longitude = serializers.FloatField(write_only=True, required=False, min_value=-180, max_value=180)
     amenities = serializers.PrimaryKeyRelatedField(
@@ -213,7 +214,7 @@ class PropertyWriteSerializer(serializers.ModelSerializer):
             "public_id",
             "slug",
             "title",
-            "description",
+            "description", "facebook_url", "instagram_url", "tiktok_url", "website", "whatsapp_number",
             "listing_type",
             "property_type",
             "price",

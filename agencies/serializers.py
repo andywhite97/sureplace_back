@@ -1,3 +1,4 @@
+from core.social import SocialValidationMixin
 from datetime import timedelta
 
 from django.conf import settings
@@ -16,7 +17,7 @@ from .models import Agency, AgencyInvitation, AgentProfile
 User = get_user_model()
 
 
-class AgencySerializer(serializers.ModelSerializer):
+class AgencySerializer(SocialValidationMixin, serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
     team_count = serializers.IntegerField(read_only=True)
 
@@ -32,7 +33,7 @@ class AgencySerializer(serializers.ModelSerializer):
             "phone",
             "email",
             "whatsapp_number",
-            "website",
+            "website", "facebook_url", "instagram_url", "tiktok_url",
             "address",
             "region",
             "town",
@@ -104,7 +105,7 @@ class PublicAgencySerializer(serializers.ModelSerializer):
             "phone",
             "email",
             "whatsapp_number",
-            "website",
+            "website", "facebook_url", "instagram_url", "tiktok_url",
             "address",
             "region",
             "town",

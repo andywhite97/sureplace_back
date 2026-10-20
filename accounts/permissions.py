@@ -75,6 +75,10 @@ STAFF_PERMISSION_CATALOG += tuple(
         ("add_note", "Add internal stay notes"),
     )
 )
+STAFF_PERMISSION_CATALOG += tuple(
+    {"key": "core." + key, "label": label, "description": "Manage private prospect onboarding with audited permission checks."}
+    for key, label in (("view_onboardingprospect", "View onboarding prospects"), ("add_onboardingprospect", "Create onboarding prospects"), ("change_onboardingprospect", "Edit onboarding prospects"), ("delete_onboardingprospect", "Delete closed prospects"), ("issue_onboarding", "Issue private previews"), ("approve_onboarding", "Record owner approval"), ("handoff_onboarding", "Invite prospect owners"))
+)
 STAFF_PERMISSION_KEYS = frozenset(item["key"] for item in STAFF_PERMISSION_CATALOG)
 
 
