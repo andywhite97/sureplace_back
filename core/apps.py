@@ -8,6 +8,7 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         connection_created.connect(log_connection_created, dispatch_uid="sureplace_db_connection_timing")
+        from . import prerender_signals  # noqa: F401 - register public-content hooks
 
 
 def log_connection_created(sender, connection, **kwargs):
