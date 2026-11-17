@@ -223,6 +223,12 @@ DEFAULT_CURRENCY = env("DEFAULT_CURRENCY", default="SZL")
 MAP_DEFAULT_LATITUDE = env.float("MAP_DEFAULT_LATITUDE", default=-26.5225)
 MAP_DEFAULT_LONGITUDE = env.float("MAP_DEFAULT_LONGITUDE", default=31.4659)
 MAP_DEFAULT_ZOOM = env.int("MAP_DEFAULT_ZOOM", default=8)
+# Optional backend-only credential for GitHub Pages prerender refreshes.
+PRERENDER_GITHUB_TOKEN = env("PRERENDER_GITHUB_TOKEN", default="")
+PRERENDER_GITHUB_REPOSITORY = env("PRERENDER_GITHUB_REPOSITORY", default="andywhite97/sureplace")
+PRERENDER_DISPATCH_COOLDOWN_SECONDS = env.int("PRERENDER_DISPATCH_COOLDOWN_SECONDS", default=300)
+PRERENDER_DISPATCH_TIMEOUT_SECONDS = env.int("PRERENDER_DISPATCH_TIMEOUT_SECONDS", default=3)
+
 FEATURE_FLAGS = {
     "stay_purchases": env.bool("STAY_PURCHASES_ENABLED", default=False),
     "property_purchases": env.bool("PROPERTY_PURCHASES_ENABLED", default=False),
